@@ -7,7 +7,9 @@ module.exports = (env) => {
   // Learn how to customize:
   // https://docs.nativescript.org/webpack
   env.appComponents = env.appComponents || [];
-  env.appComponents.push(path.resolve(__dirname, "app/bf3updateservice.ts"));
+  env.appComponents.push(
+    path.resolve(__dirname, "app/hostCardEmulationService.ts")
+  );
 
   return webpack.resolveConfig();
 };

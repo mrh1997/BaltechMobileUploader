@@ -46,7 +46,7 @@
 
 		<activity android:name="com.tns.ErrorReportActivity"/>
 
-		<service android:name="com.tns.Bf3UpdateService"
+		<service android:name="de.baltech.HostCardEmulationService"
 				 android:exported="true"
 				 android:permission="android.permission.BIND_NFC_SERVICE">
     		<intent-filter>
