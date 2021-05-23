@@ -21,6 +21,9 @@
     "svelte.config.js",
     "tsconfig.json"
   ],
+  "scripts": {
+    "test": "ts-mocha -p tests/tsconfig.json tests/**/*.test.ts"
+  },
   "keywords": [
     "nstudio",
     "nativescript",
@@ -46,12 +49,20 @@
     "@nativescript/android": "8.0.0",
     "@nativescript/types": "~8.0.0",
     "@nativescript/webpack": "beta",
+    "@types/chai": "^4.2.18",
+    "@types/mocha": "^8.2.2",
+    "@types/sinon": "^10.0.0",
+    "chai": "^4.3.4",
+    "mocha": "^8.4.0",
     "prettier": "^2.2.1",
     "prettier-plugin-svelte": "^2.2.0",
+    "sinon": "^10.0.0",
     "svelte": "~3.35.0",
     "svelte-loader-hot": "~0.3.1",
     "svelte-native-preprocessor": "^0.2.0",
     "svelte-preprocess": "^4.7.0",
+    "ts-mocha": "^8.0.0",
+    "ts-node": "^10.0.0",
     "typescript": "~4.0.0"
   },
   "private": "true",
