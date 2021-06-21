@@ -1,5 +1,14 @@
 <script lang="typescript">
-  let message: string = "Blank Svelte Native App";
+  import registerContentHandler from "./viewIntentHandler";
+  import Bec2File from "./bec2Format";
+
+  let message: string = "No File Opened";
+
+  registerContentHandler((bec2FileAsText) => {
+    const bec2File = Bec2File.parse(bec2FileAsText);
+    const hdr = bec2File.header;
+    message = `Firmware: ${hdr["FirmwareId"]} ${hdr["FirmwareVersion"]}`;
+  });
 </script>
 
 <page>
