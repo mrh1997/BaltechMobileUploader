@@ -4,6 +4,7 @@ const ENABLE_LOGGING = true;
 
 export interface ReaderInfo {
   fwString: string;
+  bootStatus: number;
   cfgId: string;
   cfgName: string;
   devSettCfgId: string;
@@ -79,12 +80,14 @@ enum Bec2OverNfcState {
   Finished,
 }
 
+const CONTENT_FOR_GET_INFO = Array.from("INFO\0").map((c) => c.charCodeAt(0));
+
 const DF_NAME = "\xF1BaltechConfCard";
 const EF_ID = [0x01, 0x01];
 
-const STATUS_FILE_OR_APP_NOT_FOUND = [0x6a, 0x82];
 const STATUS_NO_CURRENT_EF = [0x69, 0x69];
 const STATUS_CONDITION_OF_USE_NOT_SATISFIED = [0x69, 0x85];
+const STATUS_FILE_OR_APP_NOT_FOUND = [0x6a, 0x82];
 const STATUS_NOT_ENOUGH_MEMRORY_IN_FILE = [0x6a, 0x84];
 const STATUS_INCORRECT_PARAMS = [0x6a, 0x86];
 const STATUS_INSTR_CODE_INVALID = [0x6d, 0x00];
@@ -97,10 +100,13 @@ export class Bec2OverNfcSession implements EmulatedCard {
   private reqAction = 0x00;
 
   constructor(
-    public content: number[] = [],
-    private reportReaderInfo: (ReaderInfo) => void = null,
-    private reportProgress: (number) => void = null,
-    private reportFinished: (FinishCode) => void = null
+    public content?: number[],
+    private reportFinished?: (finishCode: FinishCode) => void,
+    private reportReaderInfo?: (readerInfo: ReaderInfo) => void,
+    private reportProgress?: (
+      progress: number,
+      transferredBytes: number
+    ) => void
   ) {}
 
   powerUp() {
@@ -156,9 +162,10 @@ export class Bec2OverNfcSession implements EmulatedCard {
     const [offs1, offs2, offs3, offs4, len1] = param;
     const offset = ((offs1 * 0x100 + offs2) * 0x100 + offs3) * 0x100 + offs4;
     const length = len1 - 3;
-    if (offset + length > this.content.length)
+    const content = this.content ?? CONTENT_FOR_GET_INFO;
+    if (offset + length > content.length)
       return STATUS_NOT_ENOUGH_MEMRORY_IN_FILE;
-    const sliceOfContent = this.content.slice(offset, offset + length);
+    const sliceOfContent = content.slice(offset, offset + length);
     return [0x53, 0x81, length, ...sliceOfContent, ...STATUS_OK];
   }
 
@@ -181,18 +188,23 @@ export class Bec2OverNfcSession implements EmulatedCard {
   sendReaderInfo(param: number[]) {
     function readNextStr(len) {
       curPos = curPos + len;
+      console.log("  read", len, curPos);
       return String.fromCharCode(...param.slice(curPos - len, curPos));
     }
-    const readNextByte = () => readNextStr(1).charCodeAt(0);
+    const readNextInt = (bits: number) =>
+      bits == 8
+        ? readNextStr(1).charCodeAt(0)
+        : readNextInt(bits - 8) * 0x100 + readNextInt(8);
 
     let curPos = 0;
-    let Lc = readNextByte();
+    let Lc = readNextInt(8);
     let readerInfo = {
       fwString: readNextStr(40),
+      bootStatus: readNextInt(32),
       cfgId: readNextStr(18),
-      cfgName: readNextStr(readNextByte()),
+      cfgName: readNextStr(readNextInt(8)),
       devSettCfgId: readNextStr(18),
-      devSettName: readNextStr(readNextByte()),
+      devSettName: readNextStr(readNextInt(8)),
     };
     if (curPos != param.length) return STATUS_INCORRECT_PARAMS;
     if (curPos != 1 + Lc) return STATUS_INCORRECT_PARAMS;

@@ -10,13 +10,14 @@ describe("Bec2OverNfcSession", () => {
   let sentReaderInfo: ReaderInfo;
   let sentFinishCode: FinishCode;
   let sentProgress: number;
+  let sentBytes: number;
   let bec2Sess: Bec2OverNfcSession;
 
   const apdu_SELECT_DF = [0x00, 0xa4, 0x04, 0x0c, 0x10]
     .concat([0xf1, 0x42, 0x61, 0x6c, 0x74, 0x65, 0x63, 0x68])
     .concat([0x43, 0x6f, 0x6e, 0x66, 0x43, 0x61, 0x72, 0x64]);
   const apdu_SELECT_EF = [0x00, 0xa4, 0x00, 0x0c, 0x02, 0x01, 0x01];
-  const apdu_READ_BINARY = [0x00, 0xb0, 0x00, 0x02, 0x03];
+  const apdu_READ_BINARY = (offset, len) => [0x00, 0xb0, 0x00, offset, len];
   const apdu_IS_REBOOTED = [0x80, 0x10, 0x84, 0x00, 0x01];
   const apdu_ANNOUNCE_REBOOT = [0x80, 0x11, 0x84, 0x00, 0x01]
     .concat([0x33]) // reqAction
@@ -30,16 +31,17 @@ describe("Bec2OverNfcSession", () => {
     sentProgress = null;
     bec2Sess = new Bec2OverNfcSession(
       null,
+      (finishCode: FinishCode) => {
+        if (sentFinishCode) throw new Error("FINISHED sent twice");
+        sentFinishCode = finishCode;
+      },
       (readInfo: ReaderInfo) => {
         if (sentReaderInfo) throw new Error("SEND READERINFO sent twice");
         sentReaderInfo = readInfo;
       },
-      (progress: number) => {
+      (progress: number, transferredBytes: number) => {
         sentProgress = progress;
-      },
-      (finishCode: FinishCode) => {
-        if (sentFinishCode) throw new Error("FINISHED sent twice");
-        sentFinishCode = finishCode;
+        sentBytes = transferredBytes;
       }
     );
     bec2Sess.powerUp();
@@ -81,7 +83,7 @@ describe("Bec2OverNfcSession", () => {
     it("should return part of firmware on standard READ BINARY", () => {
       const firmware = [11, 22, 33, 44, 55, 66].concat(_64kBlob);
       bec2Sess.content = firmware;
-      const readBinaryResult = bec2Sess.processApdu(apdu_READ_BINARY);
+      const readBinaryResult = bec2Sess.processApdu(apdu_READ_BINARY(2, 3));
       expect(readBinaryResult).to.deep.equal(
         firmware.slice(2, 5).concat([0x90, 0x00])
       );
@@ -89,8 +91,7 @@ describe("Bec2OverNfcSession", () => {
 
     it("should return status 6A84 when offset above firwmare length", () => {
       bec2Sess.content = [1];
-      const apdu_READ_BINARY_tooMuch = [0x00, 0xb0, 0x00, 0x00, 0x02];
-      const readBinaryResult = bec2Sess.processApdu(apdu_READ_BINARY_tooMuch);
+      const readBinaryResult = bec2Sess.processApdu(apdu_READ_BINARY(0, 2));
       expect(readBinaryResult).to.deep.equal([0x6a, 0x84]);
     });
 
@@ -104,6 +105,12 @@ describe("Bec2OverNfcSession", () => {
       expect(bec2Sess.processApdu(apdu_READ_BINARY)).to.deep.equal(
         [0x53, 0x81, l, ...contentResult].concat([0x90, 0x00])
       );
+    });
+
+    it("should return file content 'INFO\0' if no content is set", () => {
+      const readBinaryResult = bec2Sess.processApdu(apdu_READ_BINARY(0, 5));
+      const resultAsStr = String.fromCharCode(...readBinaryResult.slice(0, 5));
+      expect(resultAsStr).to.equal("INFO\0");
     });
   });
 
@@ -129,6 +136,7 @@ describe("Bec2OverNfcSession", () => {
   it("should call reportReaderInfo on SEND READERINFO", () => {
     const info: ReaderInfo = {
       fwString: "1234 FWNAME    1.23.45 11/22/33 12345678",
+      bootStatus: 0x12345678,
       cfgId: "12345-6789-9876-54",
       cfgName: "CFGNAME",
       devSettCfgId: "54321-9876-6789-23",
@@ -136,6 +144,7 @@ describe("Bec2OverNfcSession", () => {
     };
     const infoStr =
       info.fwString +
+      "\x12\x34\x56\x78" +
       info.cfgId +
       String.fromCharCode(info.cfgName.length) +
       info.cfgName +
@@ -160,7 +169,7 @@ describe("Bec2OverNfcSession", () => {
       bec2Sess.processApdu(apdu_FINISHED);
       expect(bec2Sess.processApdu(apdu_SELECT_DF)).to.deep.equal([0x69, 0x85]);
       expect(bec2Sess.processApdu(apdu_SELECT_EF)).to.deep.equal([0x69, 0x85]);
-      expect(bec2Sess.processApdu(apdu_READ_BINARY)).to.deep.equal([
+      expect(bec2Sess.processApdu(apdu_READ_BINARY(0, 1))).to.deep.equal([
         0x69,
         0x69,
       ]);

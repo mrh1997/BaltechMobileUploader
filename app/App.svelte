@@ -10,19 +10,29 @@
 
   let message: string = "No File Opened";
 
+  activateEmulatedCard(
+    new Bec2OverNfcSession(null, null, (readerInfo) => {
+      message =
+        `Detected Device\n\n` +
+        `Firmware: ${readerInfo.fwString}\n` +
+        `Config: ${readerInfo.cfgId}\n` +
+        `BootStatus: ${readerInfo.bootStatus.toString(16).padStart(8, "0")}\n`;
+    })
+  );
+
   registerContentHandler((bec2FileAsText) => {
     const bec2File = Bec2File.parse(bec2FileAsText);
     const hdr = bec2File.header;
-    message = `Loading...\nFirmware: ${hdr["FirmwareId"]} ${hdr["FirmwareVersion"]}`;
+    message =
+      "Loading...\n\n" +
+      (hdr["FirmwareId"]
+        ? `Firmware: ${hdr["FirmwareId"]} ${hdr["FirmwareVersion"]}\n`
+        : "") +
+      (hdr["Configuration"] ? `Configuration: ${hdr["Configuration"]}\n` : "");
     activateEmulatedCard(
-      new Bec2OverNfcSession(
-        bec2File.content,
-        null,
-        null,
-        (finishCode: FinishCode) => {
-          message = `Firmware Loaded\nResultcode:${finishCode}`;
-        }
-      )
+      new Bec2OverNfcSession(bec2File.content, (finishCode: FinishCode) => {
+        message = `Firmware Loaded\nResultcode:${finishCode}`;
+      })
     );
   });
 </script>
