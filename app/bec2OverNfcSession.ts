@@ -188,7 +188,6 @@ export class Bec2OverNfcSession implements EmulatedCard {
   sendReaderInfo(param: number[]) {
     function readNextStr(len) {
       curPos = curPos + len;
-      console.log("  read", len, curPos);
       return String.fromCharCode(...param.slice(curPos - len, curPos));
     }
     const readNextInt = (bits: number) =>
