@@ -60,13 +60,8 @@ class ApduDispatcher {
 
   private static logApduExec(hceProt, func: ApduHandlerFunc, params: number[]) {
     let response = null;
-    try {
-      ApduDispatcher.log(`APDU ${func.name}(${toHexStr(params)})`);
-      response = func.call(hceProt, params);
-    } catch (e) {
-      ApduDispatcher.log(`  => APDU caused exception "${e}"`);
-      throw e;
-    }
+    ApduDispatcher.log(`APDU ${func.name}(${toHexStr(params)})`);
+    response = func.call(hceProt, params);
     ApduDispatcher.log(`  => APDU response: (${toHexStr(response)})`);
     return response;
   }
@@ -77,6 +72,7 @@ enum Bec2OverNfcState {
   ReaderConnected,
   DfNameSelected,
   EfIdSelected,
+  Rebooting,
   Finished,
 }
 
@@ -95,9 +91,18 @@ const STATUS_OK = [0x90, 0x00];
 
 export class Bec2OverNfcSession implements EmulatedCard {
   static apduDisp = new ApduDispatcher();
+  static TRANSFER_SPEED = 10000.0; // measured in bytes per second
+  static PROGRESS_UPDATES_DURING_REBOOT = 10; // measured in Hz
 
   private state = Bec2OverNfcState.Initialized;
   private reqAction = 0x00;
+
+  private transferredBytes = 0;
+  private estimatedBytes: number;
+  private waitedExtraTime = 0;
+  private estimatedExtraTime: number;
+  private lastApduTimestamp: number;
+  private rebootUpdateIntervalId: number;
 
   constructor(
     public content?: number[],
@@ -110,13 +115,20 @@ export class Bec2OverNfcSession implements EmulatedCard {
   ) {}
 
   powerUp() {
+    if (this.state === Bec2OverNfcState.Rebooting) {
+      clearInterval(this.rebootUpdateIntervalId);
+      this.waitedExtraTime += Date.now() / 1000 - this.lastApduTimestamp;
+    }
     this.state = Bec2OverNfcState.ReaderConnected;
   }
 
   processApdu(input: number[]) {
+    if (this.state === Bec2OverNfcState.Rebooting) this.powerUp(); // ANNOUNCE REBOOT without doing actually a reboot
     let response = Bec2OverNfcSession.apduDisp.dispatch(this, input);
     if (!response) return STATUS_INSTR_CODE_INVALID;
-    else return response;
+    if (this.state !== Bec2OverNfcState.Finished) this.callReportProgress();
+    this.lastApduTimestamp = Date.now() / 1000;
+    return response;
   }
 
   @Bec2OverNfcSession.apduDisp.register([0x00, 0xa4, 0x04, 0x0c])
@@ -166,6 +178,7 @@ export class Bec2OverNfcSession implements EmulatedCard {
     if (offset + length > content.length)
       return STATUS_NOT_ENOUGH_MEMRORY_IN_FILE;
     const sliceOfContent = content.slice(offset, offset + length);
+    this.transferredBytes += length;
     return [0x53, 0x81, length, ...sliceOfContent, ...STATUS_OK];
   }
 
@@ -181,6 +194,12 @@ export class Bec2OverNfcSession implements EmulatedCard {
       return STATUS_CONDITION_OF_USE_NOT_SATISFIED;
     if (param.length != 5) return STATUS_INCORRECT_PARAMS;
     this.reqAction = param[0];
+    this.rebootUpdateIntervalId = setInterval(() => {
+      this.waitedExtraTime += Date.now() / 1000 - this.lastApduTimestamp;
+      this.lastApduTimestamp = Date.now() / 1000;
+      this.callReportProgress();
+    }, 1000 / Bec2OverNfcSession.PROGRESS_UPDATES_DURING_REBOOT);
+    this.state = Bec2OverNfcState.Rebooting;
     return STATUS_OK;
   }
 
@@ -220,5 +239,39 @@ export class Bec2OverNfcSession implements EmulatedCard {
     if (this.reportFinished) this.reportFinished(params[0]);
     this.state = Bec2OverNfcState.Finished;
     return STATUS_OK;
+  }
+
+  @Bec2OverNfcSession.apduDisp.register([0x80, 0x11, 0x83, 0x00, 0x08])
+  sendEstimation(params: number[]) {
+    if (this.state == Bec2OverNfcState.Finished)
+      return STATUS_CONDITION_OF_USE_NOT_SATISFIED;
+    if (params.length != 8) return STATUS_INCORRECT_PARAMS;
+    const [eb24, eb16, eb8, eb0, et24, et16, et8, et0] = params;
+    this.estimatedBytes = (eb24 << 24) + (eb16 << 16) + (eb8 << 8) + eb0;
+    this.estimatedExtraTime =
+      ((et24 << 24) + (et16 << 16) + (et8 << 8) + et0) / 1000;
+    return STATUS_OK;
+  }
+
+  @Bec2OverNfcSession.apduDisp.register([0x80, 0x11, 0x86, 0x00])
+  waitingCycle(params) {
+    if (this.state == Bec2OverNfcState.Finished)
+      return STATUS_CONDITION_OF_USE_NOT_SATISFIED;
+    if (params.length != 0) return STATUS_INCORRECT_PARAMS;
+    this.waitedExtraTime += Date.now() / 1000 - this.lastApduTimestamp;
+    return STATUS_OK;
+  }
+
+  private callReportProgress() {
+    if (this.reportProgress)
+      if (this.estimatedBytes === undefined)
+        this.reportProgress(undefined, this.transferredBytes);
+      else {
+        const speed = Bec2OverNfcSession.TRANSFER_SPEED;
+        const totalTime = this.estimatedBytes / speed + this.estimatedExtraTime;
+        const passedTime = this.transferredBytes / speed + this.waitedExtraTime;
+        const progress = Math.min(passedTime / totalTime, 1.0);
+        this.reportProgress(progress, this.transferredBytes);
+      }
   }
 }

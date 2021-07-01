@@ -21,32 +21,9 @@
   let readerInfo: ReaderInfo;
   let bec2File: Bec2File;
   let failureCode: FinishCode;
-  let transferredBytes: number;
+  let transBytes: number;
   let progress: number;
   let timerId: number;
-
-  registerContentHandler((bec2FileAsText) => {
-    state = State.Bec2SelectedAndScanning;
-    bec2File = Bec2File.parse(bec2FileAsText);
-    activateEmulatedCard(
-      new Bec2OverNfcSession(
-        bec2File.content,
-        (finishCode: FinishCode) => {
-          if (finishCode == FinishCode.Ok) state = State.Bec2Transferred;
-          else {
-            state = State.Bec2TransferFailure;
-            failureCode = finishCode;
-          }
-        },
-        null,
-        (_progress: number, _transferredBytes: number) => {
-          state = State.Bec2Transferring;
-          progress = _progress;
-          transferredBytes = _transferredBytes;
-        }
-      )
-    );
-  });
 
   function restartScanning() {
     state = State.Bec2SelectedAndScanning;
@@ -66,9 +43,33 @@
     );
   }
 
-  $: fullFirmwareId = `${bec2File?.header["FirmwareId"]} ${bec2File?.header["FirmwareVersion"]}`;
-
   restartInfoScanning();
+
+  registerContentHandler((bec2FileAsText) => {
+    state = State.Bec2SelectedAndScanning;
+    bec2File = Bec2File.parse(bec2FileAsText);
+    activateEmulatedCard(
+      new Bec2OverNfcSession(
+        bec2File.content,
+        (finishCode: FinishCode) => {
+          activateEmulatedCard(null);
+          if (finishCode == FinishCode.Ok) state = State.Bec2Transferred;
+          else {
+            state = State.Bec2TransferFailure;
+            failureCode = finishCode;
+          }
+        },
+        null,
+        (_progress: number, _transferredBytes: number) => {
+          state = State.Bec2Transferring;
+          progress = _progress;
+          transBytes = _transferredBytes;
+        }
+      )
+    );
+  });
+
+  $: fullFirmwareId = `${bec2File?.header["FirmwareId"]} ${bec2File?.header["FirmwareVersion"]}`;
 </script>
 
 <page>
@@ -103,11 +104,11 @@
         class="message"
         text="Please hold your Mobile Phone near a Baltech reader" />
       <label class="message" text="to load the following BEC2 File" />
-      {#if bec2File?.header["FirmwareId"] && bec2File?.header["FirmwareVersion"]}
+      {#if bec2File.header["FirmwareId"] && bec2File.header["FirmwareVersion"]}
         <label class="label" text="Firmware" />
         <label class="data" text={fullFirmwareId} />
       {/if}
-      {#if bec2File?.header?.Configuration}
+      {#if bec2File.header["Configuration"]}
         <label class="label" text="Configuration" />
         <label class="data" text={bec2File.header["Configuration"]} />
       {/if}
@@ -116,10 +117,10 @@
     {:else if state === State.Bec2Transferring}
       <label class="message" text="Transferring BEC2 file..." />
       <label class="label" text="Please do not remove Mobile Phone" />
-      <label class="label" text="Progress (in kBytes)" />
-      <label class="data" text={(progress * 100).toPrecision(0)} />
-      <label class="label" text="Transferred data (in kBytes)" />
-      <label class="data" text={transferredBytes / 1024} />
+      <label class="label" text="Progress" />
+      <label class="data" text="{(progress * 100).toFixed(0)}%" />
+      <label class="label" text="Transferred data" />
+      <label class="data" text="{(transBytes / 1024).toFixed(1)} kB" />
       <!-------------------------------->
     {:else if state === State.Bec2Transferred || state === State.Bec2TransferFailure}
       {#if state === State.Bec2Transferred}
