@@ -11,6 +11,7 @@ import progress = Mocha.reporters.progress;
 describe("Bec2OverNfcSession", () => {
   let sentReaderInfo: ReaderInfo;
   let sentFinishCode: FinishCode;
+  let connLostTimestamps: number[];
   let sentProgress: number;
   let sentBytes: number;
   let bec2Sess: Bec2OverNfcSession;
@@ -31,7 +32,7 @@ describe("Bec2OverNfcSession", () => {
     [0x80, 0x11, 0x84, 0x00, 0x01]
       .concat([reqAction])
       .concat([0x00, 0x00, 0x00, timeout]);
-  const apdu_FINISHED = [0x80, 0x11, 0x82, 0x00, 0x01, FinishCode.ErrUpload];
+  const apdu_FINISHED = (finCode) => [0x80, 0x11, 0x82, 0x00, 0x01, finCode];
   const apdu_SEND_ESTIMATION = (estimatedBytes, estimatedTime = 0) =>
     [0x80, 0x11, 0x83, 0x00, 0x08]
       .concat([0x00, 0x00, 0x00, estimatedBytes])
@@ -43,6 +44,7 @@ describe("Bec2OverNfcSession", () => {
     sentReaderInfo = null;
     sentFinishCode = null;
     sentProgress = null;
+    connLostTimestamps = [];
     bec2Sess = new Bec2OverNfcSession(
       null,
       (finishCode: FinishCode) => {
@@ -56,7 +58,8 @@ describe("Bec2OverNfcSession", () => {
       (progress: number, transferredBytes: number) => {
         sentProgress = progress;
         sentBytes = transferredBytes;
-      }
+      },
+      () => connLostTimestamps.push(Date.now())
     );
     bec2Sess.powerUp();
   });
@@ -175,26 +178,67 @@ describe("Bec2OverNfcSession", () => {
 
   describe("Finished behaviour", () => {
     it("should call reportFinished on FINISHED", () => {
-      expect(bec2Sess.processApdu(apdu_FINISHED)).to.deep.equal([0x90, 0x00]);
+      const result = bec2Sess.processApdu(apdu_FINISHED(FinishCode.ErrUpload));
+      expect(result).to.deep.equal([0x90, 0x00]);
       expect(sentFinishCode).to.equal(FinishCode.ErrUpload);
     });
 
     it("should not allow further commands after FINISHED", () => {
       const apdu_SEND_ESTIM = apdu_SEND_ESTIMATION(0, 1);
-      bec2Sess.processApdu(apdu_FINISHED);
+      bec2Sess.processApdu(apdu_FINISHED(FinishCode.ErrUpload));
       expect(bec2Sess.processApdu(apdu_SELECT_DF)).to.eql([0x69, 0x85]);
       expect(bec2Sess.processApdu(apdu_SELECT_EF)).to.eql([0x69, 0x85]);
       expect(bec2Sess.processApdu(apdu_READ_BINARY(0, 1))).to.eql([0x69, 0x69]);
       expect(bec2Sess.processApdu(apdu_ANNOUNCE_REBOOT())).to.eql([0x69, 0x85]);
       expect(bec2Sess.processApdu(apdu_SEND_ESTIM)).to.eql([0x69, 0x85]);
       expect(bec2Sess.processApdu(apdu_WAITING_CYCLE)).to.eql([0x69, 0x85]);
-      expect(bec2Sess.processApdu(apdu_FINISHED)).to.eql([0x69, 0x85]);
+      expect(bec2Sess.processApdu(apdu_FINISHED(FinishCode.Ok))).to.eql([
+        0x69, 0x85,
+      ]);
     });
 
-    it("should not call reportProgress after reportFinish", () => {
+    it("should not call connection lost after apdu FINISHED", () => {
+      bec2Sess.processApdu(apdu_FINISHED(FinishCode.Ok));
+      clock.tick(15000);
+      expect(connLostTimestamps).to.eql([]);
+    });
+
+    it("should never again call reportProgress after reportFinish", () => {
       sentBytes = undefined;
-      bec2Sess.processApdu(apdu_FINISHED);
+      bec2Sess.processApdu(apdu_FINISHED(FinishCode.Ok));
+      clock.tick(100000);
       expect(sentBytes).to.be.undefined;
+    });
+  });
+
+  describe("Resume", () => {
+    it("should enter connection lost state after 1sec of no activity", () => {
+      bec2Sess.processApdu(apdu_IS_REBOOTED);
+      clock.tick(14999);
+      expect(connLostTimestamps).to.eql([1000]);
+    });
+
+    it("should resume within 15sec by sending a progress callback even without actual progress", () => {
+      bec2Sess.processApdu(apdu_IS_REBOOTED);
+      sentBytes = -1;
+      clock.tick(14999);
+      expect(sentBytes).to.eql(-1);
+      bec2Sess.processApdu(apdu_SELECT_DF);
+      expect(sentBytes).to.eql(0);
+    });
+
+    it("should finish after 15sec of no activity", () => {
+      bec2Sess.processApdu(apdu_IS_REBOOTED);
+      clock.tick(15000);
+      expect(sentFinishCode).to.equal(FinishCode.ErrConnectionLost);
+    });
+
+    it("should not finish when connection resumed", () => {
+      bec2Sess.processApdu(apdu_IS_REBOOTED);
+      clock.tick(14999);
+      bec2Sess.processApdu(apdu_IS_REBOOTED);
+      clock.tick(14999);
+      expect(sentFinishCode).to.null;
     });
   });
 
@@ -255,9 +299,9 @@ describe("Bec2OverNfcSession", () => {
     it("should increment progress while waiting after ANNOUCE REBOOT", () => {
       bec2Sess.processApdu(apdu_SEND_ESTIMATION(0, 250));
       bec2Sess.processApdu(apdu_ANNOUNCE_REBOOT(1, 1000));
-      clock.tick(1000 / Bec2OverNfcSession.PROGRESS_UPDATES_DURING_REBOOT);
+      clock.tick(100);
       expect(sentProgress).to.approximately(100 / 250, 0.000001);
-      clock.tick(1000 / Bec2OverNfcSession.PROGRESS_UPDATES_DURING_REBOOT);
+      clock.tick(100);
       expect(sentProgress).to.approximately(200 / 250, 0.000001);
     });
 

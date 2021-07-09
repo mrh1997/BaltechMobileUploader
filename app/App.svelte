@@ -9,15 +9,16 @@
   } from "./bec2OverNfcSession";
   import { activateEmulatedCard } from "./hostCardEmulationService";
 
-  enum State {
-    Scanning,
+  enum AppState {
+    ScanForInfo,
     ShowReaderInfo,
-    Bec2SelectedAndScanning,
-    Bec2Transferring,
-    Bec2Transferred,
-    Bec2TransferFailure,
+    ScanForUpdate,
+    Updating,
+    ConnectionLost,
+    UpdatedSuccessfully,
+    UpdateFailure,
   }
-  let state: State;
+  let state: AppState;
   let readerInfo: ReaderInfo;
   let bec2File: Bec2File;
   let failureCode: FinishCode;
@@ -25,49 +26,56 @@
   let progress: number;
   let timerId: number;
 
-  function restartScanning() {
-    state = State.Bec2SelectedAndScanning;
-  }
-
   function restartInfoScanning() {
-    state = State.Scanning;
+    state = AppState.ScanForInfo;
     activateEmulatedCard(
       new Bec2OverNfcSession(null, null, (ri) => {
-        state = State.ShowReaderInfo;
+        state = AppState.ShowReaderInfo;
         readerInfo = ri;
         clearTimeout(timerId);
         timerId = setTimeout(() => {
-          state = State.Scanning;
+          state = AppState.ScanForInfo;
         }, 1000);
       })
     );
   }
 
-  restartInfoScanning();
-
-  registerContentHandler((bec2FileAsText) => {
-    state = State.Bec2SelectedAndScanning;
-    bec2File = Bec2File.parse(bec2FileAsText);
+  function restartScanning() {
+    state = AppState.ScanForUpdate;
     activateEmulatedCard(
       new Bec2OverNfcSession(
         bec2File.content,
         (finishCode: FinishCode) => {
-          activateEmulatedCard(null);
-          if (finishCode == FinishCode.Ok) state = State.Bec2Transferred;
+          if (finishCode == FinishCode.Ok) state = AppState.UpdatedSuccessfully;
           else {
-            state = State.Bec2TransferFailure;
+            state = AppState.UpdateFailure;
             failureCode = finishCode;
           }
+          stopScanning();
         },
         null,
         (_progress: number, _transferredBytes: number) => {
-          state = State.Bec2Transferring;
+          state = AppState.Updating;
           progress = _progress;
           transBytes = _transferredBytes;
+        },
+        () => {
+          state = AppState.ConnectionLost;
         }
       )
     );
+  }
+
+  function stopScanning() {
+    activateEmulatedCard(null);
+  }
+
+  registerContentHandler((bec2FileAsText) => {
+    bec2File = Bec2File.parse(bec2FileAsText);
+    restartScanning();
   });
+
+  restartInfoScanning();
 
   $: fullFirmwareId = `${bec2File?.header["FirmwareId"]} ${bec2File?.header["FirmwareVersion"]}`;
 </script>
@@ -75,12 +83,12 @@
 <page>
   <action-bar title="Baltech Mobile Uploader" />
   <stack-layout verticalAlignment="middle">
-    {#if state === State.Scanning}
+    {#if state === AppState.ScanForInfo}
       <label
         class="message"
         text="Please hold your Mobile Phone near a Baltech Reader" />
       <!-------------------------------->
-    {:else if state === State.ShowReaderInfo}
+    {:else if state === AppState.ShowReaderInfo}
       <label class="message" text="State of Detected Reader" />
       <label class="label" text="SerialNo" />
       <label class="data" text={readerInfo.fwString.slice(32, 40)} />
@@ -99,7 +107,7 @@
         <label class="data" text={readerInfo.bootStatus} />
       {/if}
       <!-------------------------------->
-    {:else if state === State.Bec2SelectedAndScanning}
+    {:else if state === AppState.ScanForUpdate}
       <label
         class="message"
         text="Please hold your Mobile Phone near a Baltech reader" />
@@ -114,21 +122,27 @@
       {/if}
       <button text="Read Reader Info" on:tap={restartInfoScanning} />
       <!-------------------------------->
-    {:else if state === State.Bec2Transferring}
+    {:else if state === AppState.Updating || state === AppState.ConnectionLost}
       <label class="message" text="Transferring BEC2 file..." />
       <label class="label" text="Please do not remove Mobile Phone" />
       <label class="label" text="Progress" />
-      <label class="data" text="{(progress * 100).toFixed(0)}%" />
+      <label
+        class="data"
+        text="{progress ? (progress * 100).toFixed(0) : 0}%" />
       <label class="label" text="Transferred data" />
       <label class="data" text="{(transBytes / 1024).toFixed(1)} kB" />
+      {#if state === AppState.ConnectionLost}
+        <label class="fail" text="Connection Lost!" />
+        <label class="fail" text="Please Realign Handy" />
+      {/if}
       <!-------------------------------->
-    {:else if state === State.Bec2Transferred || state === State.Bec2TransferFailure}
-      {#if state === State.Bec2Transferred}
+    {:else if state === AppState.UpdatedSuccessfully || state === AppState.UpdateFailure}
+      {#if state === AppState.UpdatedSuccessfully}
         <label class="message" text="BEC2 file transferred successfully" />
-      {:else if state === State.Bec2TransferFailure}
+      {:else if state === AppState.UpdateFailure}
         <label class="message" text="Failed to transfer BEC2 file" />
         <label class="label" text="Error Code" />
-        <label class="data" text={failureCode} />
+        <label class="data" text={FinishCode[failureCode]} />
       {/if}
       <button text="Scan for next Reader to update" on:tap={restartScanning} />
       <button text="Read Reader Info" on:tap={restartInfoScanning} />
@@ -142,9 +156,9 @@
     text-wrap: true;
     font-size: 15;
     border-width: 10;
+    text-align: center;
   }
   .message {
-    text-align: center;
     color: #3a53ff;
     font-size: 20;
   }
@@ -155,5 +169,11 @@
     border-top-width: 0;
     font-weight: bold;
     font-size: 18;
+  }
+  .fail {
+    border-width: 20;
+    font-weight: bold;
+    font-size: 18;
+    color: red;
   }
 </style>
