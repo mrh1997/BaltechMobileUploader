@@ -1,6 +1,6 @@
 export interface EmulatedCard {
   powerUp(): void;
-  processApdu(input: number[]): number[];
+  processApdu(input: number[]|Uint8Array): number[]|Uint8Array;
 }
 
 let activeEmulatedCard: EmulatedCard = null;
@@ -19,7 +19,7 @@ class HostCardEmulationService extends android.nfc.cardemulation
     activeHf = false;
   }
 
-  processCommandApdu(commandApdu: number[], extras?: any): number[] {
+  processCommandApdu(commandApdu: any, extras?: any): any {
     var response;
     if (!activeHf) {
       activeHf = true;
@@ -30,20 +30,14 @@ class HostCardEmulationService extends android.nfc.cardemulation
       response = [0x6d, 0x00];
     } else {
       try {
-        const commandApduWithoutNegNumbers = Array.from(commandApdu).map(
-          (c) => (c + 0x100) % 0x100
-        );
-        response = activeEmulatedCard.processApdu(commandApduWithoutNegNumbers);
+        const commandApduAsJsArray = new Uint8Array(commandApdu);
+        response = activeEmulatedCard.processApdu(commandApduAsJsArray);
       } catch (e) {
         console.log(`Host Card Emulation throwed Error "${e}"`);
         // ISO7816 STATUS "Execution Error (State of non-volatile memory unchanged)"
         response = [0x64, 0x00];
       }
     }
-    const responseJArray = Array.create("byte", response.length);
-    response.forEach((val, ndx) => {
-      responseJArray[ndx] = val;
-    });
-    return responseJArray;
+    return java.nio.ByteBuffer.wrap(response).array();
   }
 }
