@@ -129,9 +129,9 @@ export class Bec2OverNfcSession implements EmulatedCard {
   // (see SEND_ESTIMATION apdu)
   private estimatedBytes: number;
   // number of bytes transferred after the SEND_ESTIMATION apdu
-  private transferredBytes = 0;
+  private transferredBytes: number;
   // number of seconds waited by WAIT_CYCLE apdus or after ANNOUNCED_REBOOTs
-  private waitedExtraTime = 0;
+  private waitedExtraTime: number;
   // number of seconds expected by reader to be waited in addition to transfer
   // time (see SEND_ESTIMATION apdu)
   private estimatedExtraTime: number;
@@ -325,9 +325,13 @@ export class Bec2OverNfcSession implements EmulatedCard {
       return STATUS_CONDITION_OF_USE_NOT_SATISFIED;
     if (params.length != 8) return STATUS_INCORRECT_PARAMS;
     const [eb24, eb16, eb8, eb0, et24, et16, et8, et0] = params;
+
     this.estimatedBytes = (eb24 << 24) + (eb16 << 16) + (eb8 << 8) + eb0;
+    this.transferredBytes = 0;
     this.estimatedExtraTime =
       ((et24 << 24) + (et16 << 16) + (et8 << 8) + et0) / 1000;
+    this.waitedExtraTime = 0;
+
     return STATUS_OK;
   }
 
@@ -343,7 +347,7 @@ export class Bec2OverNfcSession implements EmulatedCard {
   private callReportProgress() {
     if (this.reportProgress)
       if (this.estimatedBytes === undefined)
-        this.reportProgress(undefined, this.transferredBytes);
+        this.reportProgress(undefined, undefined);
       else {
         const speed = Bec2OverNfcSession.TRANSFER_SPEED;
         const totalTime = this.estimatedBytes / speed + this.estimatedExtraTime;

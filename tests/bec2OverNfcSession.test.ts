@@ -224,7 +224,7 @@ describe("Bec2OverNfcSession", () => {
       clock.tick(14999);
       expect(sentBytes).to.eql(-1);
       bec2Sess.processApdu(apdu_SELECT_DF);
-      expect(sentBytes).to.eql(0);
+      expect(sentBytes).to.eql(undefined);
     });
 
     it("should finish after 15sec of no activity", () => {
@@ -256,22 +256,16 @@ describe("Bec2OverNfcSession", () => {
       expect(bec2Sess.processApdu(apdu_WAITING_CYCLE)).eql([0x90, 0x00]);
     });
 
-    it("should report undefined progress before SEND ESTIMATION", () => {
-      expect(sentProgress).to.be.undefined;
-      expect(sentProgress).to.be.undefined;
-      expect(sentBytes).to.equal(0);
-    });
-
-    it("should report actual sent bytes and undefined progress before SEND ESTIMATION", () => {
-      bec2Sess.content = Array(30).fill(0x33);
-      bec2Sess.processApdu(apdu_READ_BINARY(3, 10));
+    it("should report undefined progress and sent bytes before SEND ESTIMATION", () => {
+      bec2Sess.content = _64kBlob;
+      bec2Sess.processApdu(apdu_READ_BINARY(0, 100));
       clock.tick(100);
       bec2Sess.processApdu(apdu_WAITING_CYCLE);
       expect(sentProgress).to.be.undefined;
-      expect(sentBytes).to.equal(10);
+      expect(sentBytes).to.be.undefined;
     });
 
-    it("should report percentage of progress after SEND ESTIMATION", () => {
+    it("should report progress sent bytes after data transfer after SEND ESTIMATION", () => {
       bec2Sess.content = _64kBlob;
       bec2Sess.processApdu(apdu_SEND_ESTIMATION(estimatedBytes));
       bec2Sess.processApdu(apdu_READ_BINARY(3, estimatedBytes / 10));
@@ -281,8 +275,8 @@ describe("Bec2OverNfcSession", () => {
 
     it("should sum up percentage of progress and bytes on multiple READ BINARY", () => {
       bec2Sess.content = _64kBlob;
-      bec2Sess.processApdu(apdu_READ_BINARY(3, estimatedBytes / 10));
       bec2Sess.processApdu(apdu_SEND_ESTIMATION(estimatedBytes));
+      bec2Sess.processApdu(apdu_READ_BINARY(3, estimatedBytes / 10));
       bec2Sess.processApdu(apdu_READ_BINARY(3, (estimatedBytes / 10) * 2));
       expect(sentProgress).to.approximately(3 / 10, 0.000001);
       expect(sentBytes).to.equal((estimatedBytes / 10) * 3);
@@ -318,9 +312,9 @@ describe("Bec2OverNfcSession", () => {
 
     it("should sum up progress on multiple WAITING CYCLE", () => {
       bec2Sess.processApdu(apdu_IS_REBOOTED);
+      bec2Sess.processApdu(apdu_SEND_ESTIMATION(0, 250));
       clock.tick(80);
       bec2Sess.processApdu(apdu_WAITING_CYCLE);
-      bec2Sess.processApdu(apdu_SEND_ESTIMATION(0, 250));
       clock.tick(140);
       bec2Sess.processApdu(apdu_WAITING_CYCLE);
       expect(sentProgress).to.approximately((80 + 140) / 250, 0.000001);
