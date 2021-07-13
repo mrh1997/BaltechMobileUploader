@@ -264,7 +264,7 @@ export class Bec2OverNfcSession implements EmulatedCard {
     return [this.reqAction].concat(STATUS_OK);
   }
 
-  @Bec2OverNfcSession.apduDisp.register([0x80, 0x11, 0x84, 0x00, 0x01])
+  @Bec2OverNfcSession.apduDisp.register([0x80, 0x11, 0x85, 0x00, 0x05])
   announceReboot(param: number[]) {
     if (this.state == Bec2OverNfcState.Finished)
       return STATUS_CONDITION_OF_USE_NOT_SATISFIED;
