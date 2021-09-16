@@ -1,4 +1,5 @@
 import { EmulatedCard } from "./hostCardEmulationService";
+import Timeout = NodeJS.Timeout;
 
 const ENABLE_LOGGING = true;
 
@@ -144,9 +145,9 @@ export class Bec2OverNfcSession implements EmulatedCard {
   private lastApduTimestamp: number;
   // while rebooting the progress callback shall be called regularly. This
   // is achieved by this interval timer
-  private rebootUpdateIntervalId: number;
+  private rebootUpdateIntervalId: Timeout;
   // timer until timeout for too long connection losses
-  private connectionLostTimerId: number;
+  private connectionLostTimerId: Timeout;
 
   constructor(
     public content?: number[],

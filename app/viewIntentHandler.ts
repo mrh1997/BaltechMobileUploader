@@ -1,10 +1,10 @@
 import * as application from "@nativescript/core/application";
 
 export type Content = string;
-export type ContentHandler = (Content) => void;
+export type ContentHandler = (c: Content) => void;
 
-let content: Content;
-let contentHandler: ContentHandler;
+let content: Content | null;
+let contentHandler: ContentHandler | null;
 
 function callContentHandler() {
   if (content && contentHandler) {
