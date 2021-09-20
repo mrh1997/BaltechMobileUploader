@@ -9,6 +9,10 @@ export interface ReaderInfo {
   cfgName: string;
   devSettCfgId: string;
   devSettName: string;
+  partNo: string;
+  hwRevNo: string;
+  licenseBitMask: number;
+  busAdr: number;
 }
 
 export enum FinishCode {
@@ -301,6 +305,10 @@ export class Bec2OverNfcSession implements EmulatedCard {
       cfgName: readNextStr(readNextInt(8)),
       devSettCfgId: readNextStr(18),
       devSettName: readNextStr(readNextInt(8)),
+      partNo: readNextStr(12),
+      hwRevNo: readNextStr(12),
+      licenseBitMask: readNextInt(32),
+      busAdr: readNextInt(8),
     };
     if (curPos != param.length) return STATUS_INCORRECT_PARAMS;
     if (curPos != 1 + Lc) return STATUS_INCORRECT_PARAMS;

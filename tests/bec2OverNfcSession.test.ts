@@ -158,6 +158,10 @@ describe("Bec2OverNfcSession", () => {
       cfgName: "CFGNAME",
       devSettCfgId: "54321-9876-6789-23",
       devSettName: "DEVSETNAME",
+      partNo: "12345-123-45",
+      hwRevNo: "12345-A03C-1",
+      licenseBitMask: 0x11223344,
+      busAdr: 73,
     };
     const infoStr =
       info.fwString +
@@ -167,7 +171,12 @@ describe("Bec2OverNfcSession", () => {
       info.cfgName +
       info.devSettCfgId +
       String.fromCharCode(info.devSettName.length) +
-      info.devSettName;
+      info.devSettName +
+      info.partNo +
+      info.hwRevNo +
+      "\x11\x22\x33\x44" +
+      String.fromCharCode(info.busAdr);
+
     const Lc = infoStr.length;
     const infoArr = Array.from(infoStr).map((s) => s.charCodeAt(0));
     const apdu_SEND_READER_INFO = [0x80, 0x11, 0x81, 0x00, Lc].concat(infoArr);
