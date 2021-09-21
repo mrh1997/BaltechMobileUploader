@@ -66,9 +66,10 @@
         <label class="message" text="Transferring BEC2 file..." />
         <label class="label" text="Please do not remove Mobile Phone" />
         <label class="label" text="Progress" />
-        <label
-          class="data"
-          :text="(progress ? (progress * 100).toFixed(0) : 0) + '%'"
+        <progress
+          :value="progress * 10000"
+          maxValue="10000"
+          margin="0 10 20 10"
         />
         <label class="label" text="Transferred data" />
         <label class="data" :text="(transBytes / 1024).toFixed(1) + 'kB'" />
