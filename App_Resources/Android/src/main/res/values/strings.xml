@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Baltech Mobile Uploader</string>
-    <string name="title_activity_kimera">KIMERA</string>
+    <string name="title_activity_bmu">Baltech Uploader</string>
 
     <string name="nfcservicedesc">NFC Update Service</string>
     <string name="nfcaids">NFC Update AID</string>
