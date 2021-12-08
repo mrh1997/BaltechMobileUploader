@@ -16,6 +16,8 @@ export interface ReaderInfo {
   busAdr: number;
 }
 
+export type ReaderStats = [number, number][];
+
 export enum FinishCode {
   Ok = 0x00,
   ErrBusy = 0x01,
@@ -153,6 +155,7 @@ export class Bec2OverNfcSession implements EmulatedCard {
     public content?: number[],
     private reportFinished?: (finishCode: FinishCode) => void,
     private reportReaderInfo?: (readerInfo: ReaderInfo) => void,
+    private reportReaderStats?: (readerStats: ReaderStats) => boolean,
     private reportProgress?: (progress: number, transBytes: number) => void,
     private reportConnectionLost?: () => void
   ) {}
@@ -314,8 +317,27 @@ export class Bec2OverNfcSession implements EmulatedCard {
     if (curPos != param.length) return STATUS_INCORRECT_PARAMS;
     if (curPos != 1 + Lc) return STATUS_INCORRECT_PARAMS;
 
+    if (readerInfo.busAdr == 0xff) readerInfo.busAdr = null;
+
     if (this.reportReaderInfo) this.reportReaderInfo(readerInfo);
     return STATUS_OK;
+  }
+
+  @Bec2OverNfcSession.apduDisp.register([0x80, 0x11, 0x87, 0x00])
+  sendStatistics(param: number[]) {
+    function readNext() {
+      curPos++;
+      return param[curPos - 1];
+    }
+
+    let readerStats: ReaderStats = [];
+    let curPos = 0;
+    if (1 + readNext() != param.length) return STATUS_INCORRECT_PARAMS;
+    for (let cnt = readNext(); cnt > 0; cnt--)
+      readerStats.push([readNext(), readNext()]);
+    if (curPos != param.length) return STATUS_INCORRECT_PARAMS;
+    let resetStats = this.reportReaderStats(readerStats);
+    return [resetStats ? 0x01 : 0x00, ...STATUS_OK];
   }
 
   @Bec2OverNfcSession.apduDisp.register([0x80, 0x11, 0x82, 0x00, 0x01])

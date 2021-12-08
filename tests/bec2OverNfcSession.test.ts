@@ -4,11 +4,14 @@ import { Clock, install } from "@sinonjs/fake-timers";
 import {
   Bec2OverNfcSession,
   ReaderInfo,
+  ReaderStats,
   FinishCode,
 } from "../app/bec2OverNfcSession";
 
 describe("Bec2OverNfcSession", () => {
   let sentReaderInfo: ReaderInfo;
+  let resetReaderStats: boolean;
+  let sentReaderStats: ReaderStats;
   let sentFinishCode: FinishCode;
   let connLostTimestamps: number[];
   let sentProgress: number;
@@ -41,6 +44,8 @@ describe("Bec2OverNfcSession", () => {
   beforeEach(() => {
     clock = install();
     sentReaderInfo = null;
+    resetReaderStats = false;
+    sentReaderStats = null;
     sentFinishCode = null;
     sentProgress = null;
     connLostTimestamps = [];
@@ -53,6 +58,12 @@ describe("Bec2OverNfcSession", () => {
       (readInfo: ReaderInfo) => {
         if (sentReaderInfo) throw new Error("SEND READERINFO sent twice");
         sentReaderInfo = readInfo;
+      },
+      (readStats: ReaderStats) => {
+        if (sentReaderStats)
+          throw new Error("SEND READER STATISTICS sent twice");
+        sentReaderStats = readStats;
+        return resetReaderStats;
       },
       (progress: number, transferredBytes: number) => {
         sentProgress = progress;
@@ -149,6 +160,27 @@ describe("Bec2OverNfcSession", () => {
     });
   });
 
+  function encodeReaderInfo(
+    info: ReaderInfo,
+    bootStatusStr = "    ",
+    licsStr = "    "
+  ): string {
+    return (
+      info.fwString.padEnd(40, " ") +
+      bootStatusStr +
+      info.cfgId.padEnd(18, " ") +
+      String.fromCharCode(info.cfgName.length) +
+      info.cfgName +
+      info.devSettCfgId.padEnd(18, " ") +
+      String.fromCharCode(info.devSettName.length) +
+      info.devSettName +
+      info.partNo.padEnd(12, " ") +
+      info.hwRevNo.padEnd(12, " ") +
+      licsStr +
+      String.fromCharCode(info.busAdr != null ? info.busAdr : 255)
+    );
+  }
+
   it("should call reportReaderInfo on SEND READERINFO", () => {
     const info: ReaderInfo = {
       fwString: "1234 FWNAME    1.23.45 11/22/33 12345678",
@@ -162,20 +194,11 @@ describe("Bec2OverNfcSession", () => {
       licenseBitMask: 0x11223344,
       busAdr: 73,
     };
-    const infoStr =
-      info.fwString +
-      "\x12\x34\x56\x78" +
-      info.cfgId +
-      String.fromCharCode(info.cfgName.length) +
-      info.cfgName +
-      info.devSettCfgId +
-      String.fromCharCode(info.devSettName.length) +
-      info.devSettName +
-      info.partNo +
-      info.hwRevNo +
-      "\x11\x22\x33\x44" +
-      String.fromCharCode(info.busAdr);
-
+    const infoStr = encodeReaderInfo(
+      info,
+      "\x12\x34\x56\x78",
+      "\x11\x22\x33\x44"
+    );
     const Lc = infoStr.length;
     const infoArr = Array.from(infoStr).map((s) => s.charCodeAt(0));
     const apdu_SEND_READER_INFO = [0x80, 0x11, 0x81, 0x00, Lc].concat(infoArr);
@@ -184,6 +207,69 @@ describe("Bec2OverNfcSession", () => {
     expect(sentReaderInfo).to.deep.equal(info);
   });
 
+  it("should return BusAdr null if BusAdr returns 255", () => {
+    const info: ReaderInfo = {
+      fwString: "",
+      bootStatus: 0,
+      cfgId: "",
+      cfgName: "",
+      devSettCfgId: "",
+      devSettName: "",
+      partNo: "",
+      hwRevNo: "",
+      licenseBitMask: 0,
+      busAdr: null,
+    };
+    const infoStr = encodeReaderInfo(info);
+    const Lc = infoStr.length;
+    const infoArr = Array.from(infoStr).map((s) => s.charCodeAt(0));
+    const apdu_SEND_READER_INFO = [0x80, 0x11, 0x81, 0x00, Lc].concat(infoArr);
+    const resultSendReaderInfo = bec2Sess.processApdu(apdu_SEND_READER_INFO);
+    expect(resultSendReaderInfo).to.deep.equal([0x90, 0x00]);
+    expect(sentReaderInfo.busAdr).to.null;
+  });
+
+  describe("send stats", function () {
+    it("should call reportReaderStats with empty List on empty SEND STATISTCS", () => {
+      const apdu = [0x80, 0x11, 0x87, 0x00, 0x01, 0x00];
+      const apdu_result = bec2Sess.processApdu(apdu);
+      expect(apdu_result).to.deep.equal([0x00, 0x90, 0x00]);
+      expect(sentReaderStats).to.deep.equal([]);
+    });
+
+    it("should pass reader statistics on SEND STATISTICS", () => {
+      const stats: ReaderStats = [
+        [34, 56],
+        [1, 255],
+        [90, 3],
+      ];
+      const flatStats = [].concat.apply([], stats);
+      let apdu_head = [0x80, 0x11, 0x87, 0x00, 1 + flatStats.length];
+      const apdu = [...apdu_head, stats.length, ...flatStats];
+      const apdu_result = bec2Sess.processApdu(apdu);
+      expect(apdu_result).to.deep.equal([0x00, 0x90, 0x00]);
+      expect(sentReaderStats).to.deep.equal(stats);
+    });
+
+    it("should return 1 to SEND STATISTICS", () => {
+      const apdu = [0x80, 0x11, 0x87, 0x00, 0x01, 0x00];
+      resetReaderStats = true;
+      const apdu_result = bec2Sess.processApdu(apdu);
+      expect(apdu_result).to.deep.equal([0x01, 0x90, 0x00]);
+    });
+
+    it("should return STATUS_INCORRECT_PARAMS on too short param size", () => {
+      const apdu = [0x80, 0x11, 0x87, 0x00, 0x00, 0x00];
+      const apdu_result = bec2Sess.processApdu(apdu);
+      expect(apdu_result).to.deep.equal([0x6a, 0x86]);
+    });
+
+    it("should return STATUS_INCORRECT_PARAMS on too short array count", () => {
+      const apdu = [0x80, 0x11, 0x87, 0x00, 0x03, 0x00, 0x12, 0x34];
+      const apdu_result = bec2Sess.processApdu(apdu);
+      expect(apdu_result).to.deep.equal([0x6a, 0x86]);
+    });
+  });
   describe("Finished behaviour", () => {
     it("should call reportFinished on FINISHED", () => {
       const result = bec2Sess.processApdu(apdu_FINISHED(FinishCode.ErrUpload));

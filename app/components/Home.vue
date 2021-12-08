@@ -35,6 +35,12 @@
             :text="readerInfo.bootStatus.toString(16).padStart(8)"
           />
         </template>
+        <button
+          v-if="readerStats"
+          @tap="reportReaderStats"
+          text="Report Reader's Anomalies to BALTECH"
+          class="warning"
+        />
       </template>
       <!-------------------------------->
       <template v-else-if="state === AppState.ScanForUpdate">
@@ -130,6 +136,10 @@ label {
   font-size: 18;
   color: red;
 }
+
+.warning {
+  color: orange;
+}
 </style>
 
 <script lang="ts">
@@ -137,10 +147,12 @@ import { Component, Vue } from "vue-property-decorator";
 import { setTimeout, clearTimeout } from "@nativescript/core/timer";
 import registerContentHandler from "../viewIntentHandler";
 import Bec2File from "../bec2Format";
+import { reportStats } from "../reportStats";
 import {
   Bec2OverNfcSession,
   FinishCode,
   ReaderInfo,
+  ReaderStats,
 } from "../bec2OverNfcSession";
 import { activateEmulatedCard } from "../hostCardEmulationService";
 
@@ -162,6 +174,7 @@ export default class Home extends Vue {
 
   state = AppState.ScanForInfo;
   readerInfo: ReaderInfo = null;
+  readerStats: ReaderStats = null;
   bec2File: Bec2File = null;
   failureCode: FinishCode = null;
   transBytes: number = null;
@@ -187,14 +200,22 @@ export default class Home extends Vue {
   restartInfoScanning() {
     this.state = AppState.ScanForInfo;
     activateEmulatedCard(
-      new Bec2OverNfcSession(null, null, (ri) => {
-        this.state = AppState.ShowReaderInfo;
-        this.readerInfo = ri;
-        clearTimeout(this.timerId);
-        this.timerId = setTimeout(() => {
-          this.state = AppState.ScanForInfo;
-        }, 1000);
-      })
+      new Bec2OverNfcSession(
+        null,
+        null,
+        (ri) => {
+          this.state = AppState.ShowReaderInfo;
+          this.readerInfo = ri;
+          clearTimeout(this.timerId);
+          this.timerId = setTimeout(() => {
+            this.state = AppState.ScanForInfo;
+          }, 1000);
+        },
+        (rs) => {
+          this.readerStats = rs;
+          return false;
+        }
+      )
     );
   }
 
@@ -213,6 +234,7 @@ export default class Home extends Vue {
           activateEmulatedCard(null);
         },
         null,
+        null,
         (_progress: number, _transferredBytes: number) => {
           this.state = AppState.Updating;
           this.progress = _progress;
@@ -223,6 +245,10 @@ export default class Home extends Vue {
         }
       )
     );
+  }
+
+  reportReaderStats() {
+    reportStats(this.readerInfo, this.readerStats);
   }
 }
 </script>
