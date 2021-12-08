@@ -1,4 +1,4 @@
-import { Http, HttpResponse } from "@nativescript/core";
+import { sendBugReport } from "./drivers/sendBugReport";
 import { ReaderInfo, ReaderStats } from "./bec2OverNfcSession";
 
 const licenseNameMap = {
@@ -57,52 +57,48 @@ function decodeMap(
     let nm;
     if (key in map) nm = map[key];
     else nm = defaultName + " " + key.toString();
-    result["$" + nm] = val.toString();
+    result[nm] = val.toString();
   }
   return result;
 }
 
-export function reportStats(readerInfo: ReaderInfo, readerStats: ReaderStats) {
-  console.log(
-    `Report ${JSON.stringify({
-      readerInfo: readerInfo,
-      readerStats: readerStats,
-    })}`
-  );
+export async function reportStats(
+  readerInfo: ReaderInfo,
+  readerStats: ReaderStats
+) {
   const busAdrVals =
-    readerInfo.busAdr == null ? {} : { $BusAddress: readerInfo.busAdr };
-  Http.request({
-    url: "https://api.staticforms.xyz/submit",
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    content: JSON.stringify({
-      subject: "Statistics from Reader " + readerInfo.fwString.slice(-8),
-      accessKey: "3c01062e-85d1-40bf-9129-33fa552bc6c6", // bugreport@baltech.de
-      $FirmwareString: readerInfo.fwString,
-      $PartNo: readerInfo.partNo,
-      $HwRevNo: readerInfo.hwRevNo,
-      $ConfigID: readerInfo.cfgId + " " + readerInfo.cfgName,
-      $DevSettConfigID: readerInfo.devSettCfgId + " " + readerInfo.devSettName,
-      ...decodeMap(
-        bitMaskToList(readerInfo.bootStatus),
-        "BootStatus",
-        bootStatusNameMap
-      ),
-      ...decodeMap(
-        bitMaskToList(readerInfo.licenseBitMask),
-        "License",
-        licenseNameMap
-      ),
+    readerInfo.busAdr == null
+      ? {}
+      : { BusAddress: readerInfo.busAdr.toString() };
+  const licenseVals = decodeMap(
+    bitMaskToList(readerInfo.licenseBitMask),
+    "License ",
+    licenseNameMap
+  );
+  const bootStatusVals = decodeMap(
+    bitMaskToList(readerInfo.bootStatus),
+    "BootStatus ",
+    bootStatusNameMap
+  );
+  const statCountMap = decodeMap(
+    readerStats,
+    "StatisticsCounter ",
+    statisticsNameMap
+  );
+  await sendBugReport(
+    "Statistics from Reader " + readerInfo.fwString.slice(-8),
+    {
+      FirmwareString: readerInfo.fwString,
+      PartNo: readerInfo.partNo,
+      HwRevNo: readerInfo.hwRevNo,
+      ConfigID: readerInfo.cfgId + " " + readerInfo.cfgName,
+      DevSettConfigID: readerInfo.devSettCfgId + " " + readerInfo.devSettName,
       ...busAdrVals,
-      ...decodeMap(readerStats, "StatisticsCounter", statisticsNameMap),
-    }),
-  })
-    .then((response: HttpResponse) => {
-      console.log(`Http POST Result: ${response.statusCode}`);
-    })
-    .catch((error) => {
-      console.log(`Http POST Failure: ${error}`);
-    });
+      ...licenseVals,
+      ...bootStatusVals,
+      ...statCountMap,
+    }
+  );
 
   return false;
 }

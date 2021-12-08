@@ -13,7 +13,7 @@ export interface ReaderInfo {
   partNo: string;
   hwRevNo: string;
   licenseBitMask: number;
-  busAdr: number;
+  busAdr?: number;
 }
 
 export type ReaderStats = [number, number][];
