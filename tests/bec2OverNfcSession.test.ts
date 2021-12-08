@@ -6,7 +6,6 @@ import {
   ReaderInfo,
   FinishCode,
 } from "../app/bec2OverNfcSession";
-import progress = Mocha.reporters.progress;
 
 describe("Bec2OverNfcSession", () => {
   let sentReaderInfo: ReaderInfo;
