@@ -145,16 +145,16 @@ label {
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
 import { setTimeout, clearTimeout } from "@nativescript/core/timer";
-import registerContentHandler from "../viewIntentHandler";
-import Bec2File from "../bec2Format";
-import { reportStats } from "../reportStats";
+import registerContentHandler from "~/drivers/viewIntentHandler";
+import Bec2File from "~/bec2Format";
+import { reportStats } from "~/reportStats";
 import {
   Bec2OverNfcSession,
   FinishCode,
   ReaderInfo,
   ReaderStats,
-} from "../bec2OverNfcSession";
-import { activateEmulatedCard } from "../hostCardEmulationService";
+} from "~/bec2OverNfcSession";
+import { activateEmulatedCard } from "~/drivers/hostCardEmulationService";
 
 enum AppState {
   ScanForInfo,

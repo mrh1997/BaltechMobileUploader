@@ -1,4 +1,4 @@
-import { EmulatedCard } from "./hostCardEmulationService";
+import { EmulatedCard } from "~/drivers/hostCardEmulationService";
 import Timeout = NodeJS.Timeout;
 
 const ENABLE_LOGGING = true;

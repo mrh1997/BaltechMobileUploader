@@ -1,4 +1,4 @@
-import { sendBugReport } from "./drivers/sendBugReport";
+import { sendBugReport } from "~/drivers/sendBugReport";
 import { ReaderInfo, ReaderStats } from "./bec2OverNfcSession";
 
 const licenseNameMap = {

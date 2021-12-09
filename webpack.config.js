@@ -8,7 +8,7 @@ module.exports = (env) => {
   // https://docs.nativescript.org/webpack
   env.appComponents = env.appComponents || [];
   env.appComponents.push(
-    path.resolve(__dirname, "app/hostCardEmulationService.ts")
+    path.resolve(__dirname, "app/drivers/hostCardEmulationService.ts")
   );
 
   return webpack.resolveConfig();
