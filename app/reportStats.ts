@@ -1,7 +1,20 @@
 import { sendBugReport, SendResult } from "~/drivers/sendBugReport";
+import { readFile, writeFile } from "~/drivers/fileSystemAccess";
 import { ReaderInfo, ReaderStats } from "./bec2OverNfcSession";
 
 export { SendResult };
+
+const READERSTATS_CACHE_FILENAME = "readerStatCache.json";
+
+let readerStatsCache: { [key: string]: string }[] = [];
+export const whenSyncRequired = readFile(READERSTATS_CACHE_FILENAME).then(
+  (data) => {
+    if (data) {
+      readerStatsCache = JSON.parse(data);
+      return readerStatsCache.length > 0;
+    }
+  }
+);
 
 const licenseNameMap = {
   0: "HID License",
@@ -64,10 +77,10 @@ function decodeMap(
   return result;
 }
 
-export async function reportStats(
+export function reportStats(
   readerInfo: ReaderInfo,
   readerStats: ReaderStats
-): Promise<SendResult> {
+): void {
   const busAdrVals =
     readerInfo.busAdr == null
       ? {}
@@ -87,18 +100,31 @@ export async function reportStats(
     "StatisticsCounter ",
     statisticsNameMap
   );
-  return await sendBugReport(
-    "Statistics from Reader " + readerInfo.fwString.slice(-8),
-    {
-      FirmwareString: readerInfo.fwString,
-      PartNo: readerInfo.partNo,
-      HwRevNo: readerInfo.hwRevNo,
-      ConfigID: readerInfo.cfgId + " " + readerInfo.cfgName,
-      DevSettConfigID: readerInfo.devSettCfgId + " " + readerInfo.devSettName,
-      ...busAdrVals,
-      ...licenseVals,
-      ...bootStatusVals,
-      ...statCountMap,
-    }
-  );
+  readerStatsCache.push({
+    Timestamp: new Date(Date.now()).toUTCString(),
+    FirmwareString: readerInfo.fwString,
+    PartNo: readerInfo.partNo,
+    HwRevNo: readerInfo.hwRevNo,
+    ConfigID: readerInfo.cfgId + " " + readerInfo.cfgName,
+    DevSettConfigID: readerInfo.devSettCfgId + " " + readerInfo.devSettName,
+    ...busAdrVals,
+    ...licenseVals,
+    ...bootStatusVals,
+    ...statCountMap,
+  });
+  writeFile(READERSTATS_CACHE_FILENAME, JSON.stringify(readerStatsCache));
+}
+
+export async function syncReportedStats(): Promise<SendResult> {
+  while (readerStatsCache.length > 0) {
+    const readerStats = readerStatsCache[0];
+    const sendResult = await sendBugReport(
+      "Statistics from Reader " + readerStats.FirmwareString.slice(-8),
+      readerStats
+    );
+    if (sendResult != SendResult.Ok) return sendResult;
+    readerStatsCache.shift();
+    writeFile(READERSTATS_CACHE_FILENAME, JSON.stringify(readerStatsCache));
+  }
+  return SendResult.Ok;
 }

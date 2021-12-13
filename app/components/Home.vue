@@ -7,6 +7,11 @@
           class="message"
           text="Please hold your Mobile Phone near a Baltech Reader"
         />
+        <button
+          v-if="syncRequired"
+          text="Transfer Logs to Baltech"
+          @tap="reportReaderStats"
+        />
       </template>
       <!-------------------------------->
       <template v-else-if="state === AppState.ShowReaderInfo">
@@ -177,7 +182,12 @@ import { Component, Vue } from "vue-property-decorator";
 import { clearTimeout, setTimeout } from "@nativescript/core/timer";
 import registerContentHandler from "~/drivers/viewIntentHandler";
 import Bec2File from "~/bec2Format";
-import { reportStats, SendResult } from "~/reportStats";
+import {
+  reportStats,
+  SendResult,
+  syncReportedStats,
+  whenSyncRequired,
+} from "~/reportStats";
 import {
   Bec2OverNfcSession,
   FinishCode,
@@ -203,6 +213,7 @@ export default class Home extends Vue {
   FinishCode = FinishCode;
   AppState = AppState;
   SendResult = SendResult;
+  syncRequired = false;
 
   state: AppState = null;
   readerInfo: ReaderInfo = null;
@@ -220,6 +231,9 @@ export default class Home extends Vue {
 
   mounted() {
     this.restartInfoScanning();
+    whenSyncRequired.then((si) => {
+      this.syncRequired = si;
+    });
     registerContentHandler((bec2FileAsText) => {
       this.bec2File = Bec2File.parse(bec2FileAsText);
       this.restartScanning();
@@ -281,13 +295,16 @@ export default class Home extends Vue {
   }
 
   async reportReaderStats() {
+    console.log("REPORT");
     this.state = AppState.ReportingReaderStats;
+    this.reportStatsResult = null;
     clearTimeout(this.timerId);
     activateEmulatedCard(null);
-    this.reportStatsResult = await reportStats(
-      this.readerInfo,
-      this.readerStats
-    );
+
+    if (this.readerInfo && this.readerStats)
+      reportStats(this.readerInfo, this.readerStats);
+    this.reportStatsResult = await syncReportedStats();
+    this.syncRequired = this.reportStatsResult !== SendResult.Ok;
   }
 }
 </script>
