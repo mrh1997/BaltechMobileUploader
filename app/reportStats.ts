@@ -1,5 +1,7 @@
-import { sendBugReport } from "~/drivers/sendBugReport";
+import { sendBugReport, SendResult } from "~/drivers/sendBugReport";
 import { ReaderInfo, ReaderStats } from "./bec2OverNfcSession";
+
+export { SendResult };
 
 const licenseNameMap = {
   0: "HID License",
@@ -65,7 +67,7 @@ function decodeMap(
 export async function reportStats(
   readerInfo: ReaderInfo,
   readerStats: ReaderStats
-) {
+): Promise<SendResult> {
   const busAdrVals =
     readerInfo.busAdr == null
       ? {}
@@ -85,7 +87,7 @@ export async function reportStats(
     "StatisticsCounter ",
     statisticsNameMap
   );
-  await sendBugReport(
+  return await sendBugReport(
     "Statistics from Reader " + readerInfo.fwString.slice(-8),
     {
       FirmwareString: readerInfo.fwString,
@@ -99,6 +101,4 @@ export async function reportStats(
       ...statCountMap,
     }
   );
-
-  return false;
 }

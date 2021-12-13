@@ -38,7 +38,7 @@
         <button
           v-if="readerStats"
           @tap="reportReaderStats"
-          text="Report Reader's Anomalies to BALTECH"
+          text="Report Reader's Logs to BALTECH"
           class="warning"
         />
       </template>
@@ -102,6 +102,36 @@
         <button text="Scan for next Reader to update" @tap="restartScanning" />
         <button text="Read Reader Info" @tap="restartInfoScanning" />
       </template>
+      <!-------------------------------->
+      <template v-else-if="state === AppState.ReportingReaderStats">
+        <template v-if="reportStatsResult === null">
+          <label
+            class="message"
+            text="Transferring Reader's Logs to BALTECH AG"
+          />
+          <activityIndicator busy="true" />
+        </template>
+        <template v-else-if="reportStatsResult === SendResult.Ok">
+          <label
+            class="message"
+            text="Successfully transferred Logs to BALTECH AG"
+          />
+        </template>
+        <template v-else>
+          <label
+            v-if="reportStatsResult === SendResult.NetworkFailure"
+            class="message"
+            text="No Internetconnection for sending data"
+          />
+          <label
+            v-if="reportStatsResult === SendResult.ServerFailure"
+            class="message"
+            text="BALTECH Server is not working or blocked"
+          />
+          <label class="data" text="Please retry" />
+        </template>
+        <button text="OK" @tap="restartInfoScanning" />
+      </template>
     </stack-layout>
   </page>
 </template>
@@ -144,10 +174,10 @@ label {
 
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
-import { setTimeout, clearTimeout } from "@nativescript/core/timer";
+import { clearTimeout, setTimeout } from "@nativescript/core/timer";
 import registerContentHandler from "~/drivers/viewIntentHandler";
 import Bec2File from "~/bec2Format";
-import { reportStats } from "~/reportStats";
+import { reportStats, SendResult } from "~/reportStats";
 import {
   Bec2OverNfcSession,
   FinishCode,
@@ -164,6 +194,7 @@ enum AppState {
   ConnectionLost,
   UpdatedSuccessfully,
   UpdateFailure,
+  ReportingReaderStats,
 }
 
 @Component
@@ -171,8 +202,9 @@ export default class Home extends Vue {
   // for use in template...
   FinishCode = FinishCode;
   AppState = AppState;
+  SendResult = SendResult;
 
-  state = AppState.ScanForInfo;
+  state: AppState = null;
   readerInfo: ReaderInfo = null;
   readerStats: ReaderStats = null;
   bec2File: Bec2File = null;
@@ -180,6 +212,7 @@ export default class Home extends Vue {
   transBytes: number = null;
   progress: number = null;
   timerId: number = null;
+  reportStatsResult: SendResult = null;
 
   get fullFirmwareId() {
     return `${this.bec2File?.header["FirmwareId"]} ${this.bec2File?.header["FirmwareVersion"]}`;
@@ -247,8 +280,14 @@ export default class Home extends Vue {
     );
   }
 
-  reportReaderStats() {
-    reportStats(this.readerInfo, this.readerStats);
+  async reportReaderStats() {
+    this.state = AppState.ReportingReaderStats;
+    clearTimeout(this.timerId);
+    activateEmulatedCard(null);
+    this.reportStatsResult = await reportStats(
+      this.readerInfo,
+      this.readerStats
+    );
   }
 }
 </script>
