@@ -162,7 +162,6 @@ export class Bec2OverNfcSession implements EmulatedCard {
 
   powerUp() {
     if (this.state === Bec2OverNfcState.Rebooting) {
-      console.log("STOP INTERVAL");
       clearInterval(this.rebootUpdateIntervalId);
       this.waitedExtraTime += Date.now() / 1000 - this.lastApduTimestamp;
     }
@@ -278,9 +277,7 @@ export class Bec2OverNfcSession implements EmulatedCard {
       return STATUS_CONDITION_OF_USE_NOT_SATISFIED;
     if (param.length != 5) return STATUS_INCORRECT_PARAMS;
     this.reqAction = param[0];
-    console.log("START INTERVAL");
     this.rebootUpdateIntervalId = setInterval(() => {
-      console.log("PROGRESS");
       this.waitedExtraTime += Date.now() / 1000 - this.lastApduTimestamp;
       this.lastApduTimestamp = Date.now() / 1000;
       this.callReportProgress();

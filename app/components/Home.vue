@@ -9,7 +9,7 @@
         />
         <button
           v-if="syncRequired"
-          text="Transfer Logs to Baltech"
+          text="Transfer Logs to BALTECH"
           @tap="reportReaderStats"
         />
       </template>
@@ -42,7 +42,7 @@
         </template>
         <button
           v-if="readerStats"
-          @tap="reportReaderStats"
+          @tap="requestReportReaderStats"
           text="Report Reader's Logs to BALTECH"
           class="warning"
         />
@@ -224,6 +224,7 @@ export default class Home extends Vue {
   progress: number = null;
   timerId: number = null;
   reportStatsResult: SendResult = null;
+  reqReportReaderStats: boolean = false;
 
   get fullFirmwareId() {
     return `${this.bec2File?.header["FirmwareId"]} ${this.bec2File?.header["FirmwareVersion"]}`;
@@ -246,6 +247,8 @@ export default class Home extends Vue {
 
   restartInfoScanning() {
     this.state = AppState.ScanForInfo;
+    this.readerStats = null;
+    this.reqReportReaderStats = false;
     activateEmulatedCard(
       new Bec2OverNfcSession(
         null,
@@ -259,8 +262,13 @@ export default class Home extends Vue {
           }, 1000);
         },
         (rs) => {
-          this.readerStats = rs;
-          return false;
+          if (this.reqReportReaderStats) {
+            this.reportReaderStats();
+            return true;
+          } else {
+            this.readerStats = rs;
+            return false;
+          }
         }
       )
     );
@@ -294,8 +302,11 @@ export default class Home extends Vue {
     );
   }
 
+  requestReportReaderStats() {
+    this.reqReportReaderStats = true;
+  }
+
   async reportReaderStats() {
-    console.log("REPORT");
     this.state = AppState.ReportingReaderStats;
     this.reportStatsResult = null;
     clearTimeout(this.timerId);

@@ -23,7 +23,7 @@ const licenseNameMap = {
 
 const statisticsNameMap = {
   2: "WatchdogResetCount",
-  3: "StackoverflowCount",
+  3: "StackOverflowCount",
   5: "BrownoutResetCount",
   6: "KeypadResetCount",
   8: "AccessRestrictedTaskOverflowResetCount",
