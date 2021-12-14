@@ -9,7 +9,7 @@
         />
         <button
           v-if="syncRequired"
-          text="Transfer Logs to BALTECH"
+          text="Retry Transferring Logs to BALTECH"
           @tap="reportInfos"
         />
       </template>
@@ -132,7 +132,7 @@
             class="message"
             text="BALTECH Server is not working or blocked"
           />
-          <label class="data" text="Please retry" />
+          <label class="data" text="Please retry transferring logs later" />
         </template>
         <button text="OK" @tap="restartInfoScanning" />
       </template>
