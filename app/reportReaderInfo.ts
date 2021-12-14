@@ -4,14 +4,14 @@ import { ReaderInfo, ReaderStats } from "./bec2OverNfcSession";
 
 export { SendResult };
 
-const READERSTATS_CACHE_FILENAME = "readerStatCache.json";
+const READERINFO_CACHE_FILENAME = "readerInfoCache.json";
 
-let readerStatsCache: { [key: string]: string }[] = [];
-export const whenSyncRequired = readFile(READERSTATS_CACHE_FILENAME).then(
+let readerInfoStrCache: { [key: string]: string }[] = [];
+export const whenSyncRequired = readFile(READERINFO_CACHE_FILENAME).then(
   (data) => {
     if (data) {
-      readerStatsCache = JSON.parse(data);
-      return readerStatsCache.length > 0;
+      readerInfoStrCache = JSON.parse(data);
+      return readerInfoStrCache.length > 0;
     }
   }
 );
@@ -77,9 +77,9 @@ function decodeMap(
   return result;
 }
 
-export function reportStats(
+export function reportReaderInfo(
   readerInfo: ReaderInfo,
-  readerStats: ReaderStats
+  readerStats?: ReaderStats
 ): void {
   const busAdrVals =
     readerInfo.busAdr == null
@@ -96,11 +96,11 @@ export function reportStats(
     bootStatusNameMap
   );
   const statCountMap = decodeMap(
-    readerStats,
+    readerStats || [],
     "StatisticsCounter ",
     statisticsNameMap
   );
-  readerStatsCache.push({
+  readerInfoStrCache.push({
     Timestamp: new Date(Date.now()).toUTCString(),
     FirmwareString: readerInfo.fwString,
     PartNo: readerInfo.partNo,
@@ -112,19 +112,23 @@ export function reportStats(
     ...bootStatusVals,
     ...statCountMap,
   });
-  writeFile(READERSTATS_CACHE_FILENAME, JSON.stringify(readerStatsCache));
+  writeFile(READERINFO_CACHE_FILENAME, JSON.stringify(readerInfoStrCache));
 }
 
-export async function syncReportedStats(): Promise<SendResult> {
-  while (readerStatsCache.length > 0) {
-    const readerStats = readerStatsCache[0];
+export async function syncReportedInfos(): Promise<SendResult> {
+  while (readerInfoStrCache.length > 0) {
+    const readerInfoStr = readerInfoStrCache[0];
+    const keysStr = Object.keys(readerInfoStr).join();
+    let postfix = "";
+    if (keysStr.includes("STATISTICS:")) postfix = " [STATISTICS]";
+    else if (keysStr.includes("BOOTSTATUS:")) postfix = " [BOOTSTATUS]";
     const sendResult = await sendBugReport(
-      "Statistics from Reader " + readerStats.FirmwareString.slice(-8),
-      readerStats
+      "NFC Readerinfo #" + readerInfoStr.FirmwareString.slice(-8) + postfix,
+      readerInfoStr
     );
     if (sendResult != SendResult.Ok) return sendResult;
-    readerStatsCache.shift();
-    writeFile(READERSTATS_CACHE_FILENAME, JSON.stringify(readerStatsCache));
+    readerInfoStrCache.shift();
+    writeFile(READERINFO_CACHE_FILENAME, JSON.stringify(readerInfoStrCache));
   }
   return SendResult.Ok;
 }

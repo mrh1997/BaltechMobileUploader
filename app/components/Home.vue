@@ -10,7 +10,7 @@
         <button
           v-if="syncRequired"
           text="Transfer Logs to BALTECH"
-          @tap="reportReaderStats"
+          @tap="reportInfos"
         />
       </template>
       <!-------------------------------->
@@ -41,10 +41,9 @@
           />
         </template>
         <button
-          v-if="readerStats"
-          @tap="requestReportReaderStats"
-          text="Report Reader's Logs to BALTECH"
-          class="warning"
+          text="Report Reader Infos to BALTECH"
+          @tap="readerInfo.bootStatus ? requestReportInfos() : reportInfos()"
+          :class="readerStats ? ['warning'] : []"
         />
       </template>
       <!-------------------------------->
@@ -108,15 +107,15 @@
         <button text="Read Reader Info" @tap="restartInfoScanning" />
       </template>
       <!-------------------------------->
-      <template v-else-if="state === AppState.ReportingReaderStats">
-        <template v-if="reportStatsResult === null">
+      <template v-else-if="state === AppState.ReportingReaderInfos">
+        <template v-if="reportReaderInfoResult === null">
           <label
             class="message"
             text="Transferring Reader's Logs to BALTECH AG"
           />
           <activityIndicator busy="true" />
         </template>
-        <template v-else-if="reportStatsResult === SendResult.Ok">
+        <template v-else-if="reportReaderInfoResult === SendResult.Ok">
           <label
             class="message"
             text="Successfully transferred Logs to BALTECH AG"
@@ -124,12 +123,12 @@
         </template>
         <template v-else>
           <label
-            v-if="reportStatsResult === SendResult.NetworkFailure"
+            v-if="reportReaderInfoResult === SendResult.NetworkFailure"
             class="message"
             text="No Internetconnection for sending data"
           />
           <label
-            v-if="reportStatsResult === SendResult.ServerFailure"
+            v-if="reportReaderInfoResult === SendResult.ServerFailure"
             class="message"
             text="BALTECH Server is not working or blocked"
           />
@@ -183,11 +182,11 @@ import { clearTimeout, setTimeout } from "@nativescript/core/timer";
 import registerContentHandler from "~/drivers/viewIntentHandler";
 import Bec2File from "~/bec2Format";
 import {
-  reportStats,
+  reportReaderInfo,
   SendResult,
-  syncReportedStats,
+  syncReportedInfos,
   whenSyncRequired,
-} from "~/reportStats";
+} from "~/reportReaderInfo";
 import {
   Bec2OverNfcSession,
   FinishCode,
@@ -204,7 +203,7 @@ enum AppState {
   ConnectionLost,
   UpdatedSuccessfully,
   UpdateFailure,
-  ReportingReaderStats,
+  ReportingReaderInfos,
 }
 
 @Component
@@ -223,8 +222,8 @@ export default class Home extends Vue {
   transBytes: number = null;
   progress: number = null;
   timerId: number = null;
-  reportStatsResult: SendResult = null;
-  reqReportReaderStats: boolean = false;
+  reportReaderInfoResult: SendResult = null;
+  reqReportInfos: boolean = false;
 
   get fullFirmwareId() {
     return `${this.bec2File?.header["FirmwareId"]} ${this.bec2File?.header["FirmwareVersion"]}`;
@@ -248,7 +247,7 @@ export default class Home extends Vue {
   restartInfoScanning() {
     this.state = AppState.ScanForInfo;
     this.readerStats = null;
-    this.reqReportReaderStats = false;
+    this.reqReportInfos = false;
     activateEmulatedCard(
       new Bec2OverNfcSession(
         null,
@@ -262,8 +261,8 @@ export default class Home extends Vue {
           }, 1000);
         },
         (rs) => {
-          if (this.reqReportReaderStats) {
-            this.reportReaderStats();
+          if (this.reqReportInfos) {
+            this.reportInfos();
             return true;
           } else {
             this.readerStats = rs;
@@ -302,20 +301,19 @@ export default class Home extends Vue {
     );
   }
 
-  requestReportReaderStats() {
-    this.reqReportReaderStats = true;
+  requestReportInfos() {
+    this.reqReportInfos = true;
   }
 
-  async reportReaderStats() {
-    this.state = AppState.ReportingReaderStats;
-    this.reportStatsResult = null;
+  async reportInfos() {
+    this.state = AppState.ReportingReaderInfos;
+    this.reportReaderInfoResult = null;
     clearTimeout(this.timerId);
     activateEmulatedCard(null);
 
-    if (this.readerInfo && this.readerStats)
-      reportStats(this.readerInfo, this.readerStats);
-    this.reportStatsResult = await syncReportedStats();
-    this.syncRequired = this.reportStatsResult !== SendResult.Ok;
+    if (this.readerInfo) reportReaderInfo(this.readerInfo, this.readerStats);
+    this.reportReaderInfoResult = await syncReportedInfos();
+    this.syncRequired = this.reportReaderInfoResult !== SendResult.Ok;
   }
 }
 </script>
