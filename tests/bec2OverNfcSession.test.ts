@@ -204,7 +204,7 @@ describe("Bec2OverNfcSession", () => {
     const apdu_SEND_READER_INFO = [0x80, 0x11, 0x81, 0x00, Lc].concat(infoArr);
     const resultSendReaderInfo = bec2Sess.processApdu(apdu_SEND_READER_INFO);
     expect(resultSendReaderInfo).to.deep.equal([0x90, 0x00]);
-    expect(sentReaderInfo).to.deep.equal(info);
+    expect(sentReaderInfo).to.deep.equal({ ...info, rawData: infoArr });
   });
 
   it("should return BusAdr null if BusAdr returns 255", () => {

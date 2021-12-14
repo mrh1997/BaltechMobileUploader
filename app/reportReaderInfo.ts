@@ -1,6 +1,7 @@
 import { sendBugReport, SendResult } from "~/drivers/sendBugReport";
 import { readFile, writeFile } from "~/drivers/fileSystemAccess";
 import { ReaderInfo, ReaderStats } from "./bec2OverNfcSession";
+import { toHexBlock } from "~/formatters";
 
 export { SendResult };
 
@@ -64,15 +65,15 @@ function bitMaskToList(bitMask: number): [number, number][] {
 
 function decodeMap(
   lst: [number, number][],
-  defaultName: string,
+  prefix: string,
   map: { [nm: number]: string }
 ): { [nm: string]: string } {
   let result = {};
   for (let [key, val] of lst) {
     let nm;
-    if (key in map) nm = map[key];
-    else nm = defaultName + " " + key.toString();
-    result[nm] = val.toString();
+    if (key in map) nm = " (" + map[key] + ")";
+    else nm = "";
+    result[prefix + ":" + key.toString() + nm] = val.toString();
   }
   return result;
 }
@@ -87,17 +88,17 @@ export function reportReaderInfo(
       : { BusAddress: readerInfo.busAdr.toString() };
   const licenseVals = decodeMap(
     bitMaskToList(readerInfo.licenseBitMask),
-    "License ",
+    "LICENSE",
     licenseNameMap
   );
   const bootStatusVals = decodeMap(
     bitMaskToList(readerInfo.bootStatus),
-    "BootStatus ",
+    "BOOTSTATUS",
     bootStatusNameMap
   );
   const statCountMap = decodeMap(
     readerStats || [],
-    "StatisticsCounter ",
+    "STATISTICS",
     statisticsNameMap
   );
   readerInfoStrCache.push({
@@ -111,6 +112,8 @@ export function reportReaderInfo(
     ...licenseVals,
     ...bootStatusVals,
     ...statCountMap,
+    "RAWDATA:Send ReaderInfo": toHexBlock(readerInfo.rawData),
+    "RAWDATA:Send Statistics": JSON.stringify(readerStats),
   });
   writeFile(READERINFO_CACHE_FILENAME, JSON.stringify(readerInfoStrCache));
 }

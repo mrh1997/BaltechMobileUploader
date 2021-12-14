@@ -1,5 +1,6 @@
 import { EmulatedCard } from "~/drivers/hostCardEmulationService";
 import Timeout = NodeJS.Timeout;
+import { toHexBlock } from "./formatters";
 
 const ENABLE_LOGGING = true;
 
@@ -14,6 +15,7 @@ export interface ReaderInfo {
   hwRevNo: string;
   licenseBitMask: number;
   busAdr?: number;
+  rawData: number[];
 }
 
 export type ReaderStats = [number, number][];
@@ -34,20 +36,6 @@ export enum FinishCode {
 
   // negative numbers are internal error codes, that are not returned by reader
   ErrConnectionLost = -1,
-}
-
-function toHexBlock(array: number[]) {
-  const maxSize = 16;
-  if (array.length <= maxSize)
-    return array.map((c) => c.toString(16).padStart(2, "0")).join(" ");
-  else
-    return (
-      "\n\t\t\t\t" +
-      [...array.keys()]
-        .slice(0, 1 + array.length / maxSize)
-        .map((i) => toHexBlock(array.slice(i * maxSize, (i + 1) * maxSize)))
-        .join("\n\t\t\t\t")
-    );
 }
 
 function toTimeStr(timestamp: Date) {
@@ -310,6 +298,7 @@ export class Bec2OverNfcSession implements EmulatedCard {
       hwRevNo: readNextStr(12),
       licenseBitMask: readNextInt(32),
       busAdr: readNextInt(8),
+      rawData: param.slice(1),
     };
     if (curPos != param.length) return STATUS_INCORRECT_PARAMS;
     if (curPos != 1 + Lc) return STATUS_INCORRECT_PARAMS;
