@@ -18,6 +18,7 @@ export default function registerContentHandler(newHandler: ContentHandler) {
   callContentHandler();
 }
 
+application.ensureNativeApplication();
 application.android.on("activityDestroyed", (data) => {
   contentHandler = null;
 });
