@@ -101,7 +101,7 @@
         <template v-else-if="state === AppState.UpdateFailure">
           <label class="message" text="Failed to transfer BEC2 file" />
           <label class="label" text="Error Code" />
-          <label class="data" :text="this.FinishCode[failureCode]" />
+          <label class="data" :text="FinishCode[failureCode]" />
         </template>
         <button text="Scan for next Reader to update" @tap="restartScanning" />
         <button text="Read Reader Info" @tap="restartInfoScanning" />
@@ -177,7 +177,7 @@ label {
 </style>
 
 <script lang="ts">
-import { Component, Vue } from "vue-property-decorator";
+import { onMounted, onUnmounted, ref, computed } from "@vue/composition-api";
 import { clearTimeout, setTimeout } from "@nativescript/core/timer";
 import { registerContentHandler } from "~/drivers/viewIntentHandler";
 import Bec2File from "~/bec2Format";
@@ -206,114 +206,134 @@ enum AppState {
   ReportingReaderInfos,
 }
 
-@Component
-export default class Home extends Vue {
-  // for use in template...
-  FinishCode = FinishCode;
-  AppState = AppState;
-  SendResult = SendResult;
-  syncRequired = false;
+export default {
+  setup() {
+    const syncRequired = ref(false);
+    const state = ref<AppState>(null);
+    const readerInfo = ref<ReaderInfo>(null);
+    const readerStats = ref<ReaderStats>(null);
+    const bec2File = ref<Bec2File>(null);
+    const failureCode = ref<FinishCode>(null);
+    const transBytes = ref<number>(null);
+    const progress = ref<number>(null);
+    const timerId = ref<number>(null);
+    const reportReaderInfoResult = ref<SendResult>(null);
+    const reqReportInfos = ref(false);
 
-  state: AppState = null;
-  readerInfo: ReaderInfo = null;
-  readerStats: ReaderStats = null;
-  bec2File: Bec2File = null;
-  failureCode: FinishCode = null;
-  transBytes: number = null;
-  progress: number = null;
-  timerId: number = null;
-  reportReaderInfoResult: SendResult = null;
-  reqReportInfos: boolean = false;
-
-  get fullFirmwareId() {
-    return `${this.bec2File?.header["FirmwareId"]} ${this.bec2File?.header["FirmwareVersion"]}`;
-  }
-
-  mounted() {
-    this.restartInfoScanning();
-    whenSyncRequired.then((si) => {
-      this.syncRequired = si;
-    });
-    registerContentHandler((bec2FileAsText) => {
-      this.bec2File = Bec2File.parse(bec2FileAsText);
-      this.restartScanning();
-    });
-  }
-
-  unmounted() {
-    registerContentHandler(null);
-  }
-
-  restartInfoScanning() {
-    this.state = AppState.ScanForInfo;
-    this.readerStats = null;
-    this.reqReportInfos = false;
-    activateEmulatedCard(
-      new Bec2OverNfcSession(
-        null,
-        null,
-        (ri) => {
-          this.state = AppState.ShowReaderInfo;
-          this.readerInfo = ri;
-          clearTimeout(this.timerId);
-          this.timerId = setTimeout(() => {
-            this.state = AppState.ScanForInfo;
-          }, 1000);
-        },
-        (rs) => {
-          if (this.reqReportInfos) {
-            this.reportInfos();
-            return true;
-          } else {
-            this.readerStats = rs;
-            return false;
-          }
-        }
-      )
+    const fullFirmwareId = computed(
+      () =>
+        `${bec2File?.value.header["FirmwareId"]} ${bec2File?.value.header["FirmwareVersion"]}`
     );
-  }
 
-  restartScanning() {
-    this.state = AppState.ScanForUpdate;
-    activateEmulatedCard(
-      new Bec2OverNfcSession(
-        this.bec2File.content,
-        (finishCode: FinishCode) => {
-          if (finishCode == FinishCode.Ok)
-            this.state = AppState.UpdatedSuccessfully;
-          else {
-            this.state = AppState.UpdateFailure;
-            this.failureCode = finishCode;
+    onMounted(() => {
+      restartInfoScanning();
+      whenSyncRequired.then((si) => {
+        syncRequired.value = si;
+      });
+      registerContentHandler((bec2FileAsText) => {
+        bec2File.value = Bec2File.parse(bec2FileAsText);
+        restartScanning();
+      });
+    });
+
+    onUnmounted(() => {
+      registerContentHandler(null);
+    });
+
+    function restartInfoScanning() {
+      state.value = AppState.ScanForInfo;
+      readerStats.value = null;
+      reqReportInfos.value = false;
+      activateEmulatedCard(
+        new Bec2OverNfcSession(
+          null,
+          null,
+          (ri) => {
+            state.value = AppState.ShowReaderInfo;
+            readerInfo.value = ri;
+            clearTimeout(timerId.value);
+            timerId.value = setTimeout(() => {
+              state.value = AppState.ScanForInfo;
+            }, 1000);
+          },
+          (rs) => {
+            if (reqReportInfos.value) {
+              reportInfos();
+              return true;
+            } else {
+              readerStats.value = rs;
+              return false;
+            }
           }
-          activateEmulatedCard(null);
-        },
-        null,
-        null,
-        (_progress: number, _transferredBytes: number) => {
-          this.state = AppState.Updating;
-          this.progress = _progress;
-          this.transBytes = _transferredBytes;
-        },
-        () => {
-          this.state = AppState.ConnectionLost;
-        }
-      )
-    );
-  }
+        )
+      );
+    }
 
-  requestReportInfos() {
-    this.reqReportInfos = true;
-  }
+    function restartScanning() {
+      state.value = AppState.ScanForUpdate;
+      activateEmulatedCard(
+        new Bec2OverNfcSession(
+          bec2File.value.content,
+          (finishCode: FinishCode) => {
+            if (finishCode == FinishCode.Ok)
+              state.value = AppState.UpdatedSuccessfully;
+            else {
+              state.value = AppState.UpdateFailure;
+              failureCode.value = finishCode;
+            }
+            activateEmulatedCard(null);
+          },
+          null,
+          null,
+          (_progress: number, _transferredBytes: number) => {
+            state.value = AppState.Updating;
+            progress.value = _progress;
+            transBytes.value = _transferredBytes;
+          },
+          () => {
+            state.value = AppState.ConnectionLost;
+          }
+        )
+      );
+    }
 
-  async reportInfos() {
-    this.state = AppState.ReportingReaderInfos;
-    this.reportReaderInfoResult = null;
-    clearTimeout(this.timerId);
-    activateEmulatedCard(null);
+    function requestReportInfos() {
+      reqReportInfos.value = true;
+    }
 
-    if (this.readerInfo) reportReaderInfo(this.readerInfo, this.readerStats);
-    this.reportReaderInfoResult = await syncReportedInfos();
-    this.syncRequired = this.reportReaderInfoResult !== SendResult.Ok;
-  }
-}
+    async function reportInfos() {
+      state.value = AppState.ReportingReaderInfos;
+      reportReaderInfoResult.value = null;
+      clearTimeout(timerId.value);
+      activateEmulatedCard(null);
+
+      if (readerInfo.value)
+        reportReaderInfo(readerInfo.value, readerStats.value);
+      reportReaderInfoResult.value = await syncReportedInfos();
+      syncRequired.value = reportReaderInfoResult.value !== SendResult.Ok;
+    }
+
+    return {
+      AppState,
+      FinishCode,
+      SendResult,
+      bec2File,
+      failureCode,
+      fullFirmwareId,
+      progress,
+      readerInfo,
+      readerStats,
+      reportInfos,
+      reportReaderInfoResult,
+      reqReportInfos,
+      requestReportInfos,
+      restartInfoScanning,
+      restartScanning,
+      state,
+      syncRequired,
+      timerId,
+      transBytes,
+    };
+  },
+};
 </script>
