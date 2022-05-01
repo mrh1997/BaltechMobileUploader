@@ -6,7 +6,7 @@ import {
   ReaderInfo,
   ReaderStats,
   FinishCode,
-} from "../app/bec2OverNfcSession";
+} from "~/bec2OverNfcSession";
 
 describe("Bec2OverNfcSession", () => {
   let sentReaderInfo: ReaderInfo;

@@ -20,7 +20,7 @@
     "tsconfig.json"
   ],
   "scripts": {
-    "test": "ts-mocha -p tests/tsconfig.json tests/**/*.test.ts"
+    "test": "mocha -r ts-node/register -r tsconfig-paths/register tests/**/*.test.ts"
   },
   "keywords": [
     "nstudio",
@@ -51,19 +51,19 @@
     "@nativescript/android": "8.2.2",
     "@nativescript/types": "8.2.0",
     "@nativescript/webpack": "5.0.6",
+    "@sinonjs/fake-timers": "^7.1.2",
     "@types/chai": "^4.2.18",
     "@types/mocha": "^8.2.2",
+    "@types/node": "~14.6.2",
     "@types/sinon": "^10.0.0",
     "chai": "^4.3.4",
-    "mocha": "^8.4.0",
-    "@sinonjs/fake-timers": "^7.1.2",
-    "prettier": "^2.2.1",
     "eslint-plugin-prettier": "^4.0.0",
-    "sinon": "^10.0.0",
-    "@types/node": "~14.6.2",
+    "mocha": "^8.4.0",
     "nativescript-vue-template-compiler": "2.9.1",
-    "ts-mocha": "^8.0.0",
+    "prettier": "^2.2.1",
+    "sinon": "^10.0.0",
     "ts-node": "10.7.0",
+    "tsconfig-paths": "^3.14.1",
     "typescript": "4.0.8",
     "vue": "2.6.14"
   },

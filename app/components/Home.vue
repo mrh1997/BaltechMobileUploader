@@ -179,7 +179,7 @@ label {
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
 import { clearTimeout, setTimeout } from "@nativescript/core/timer";
-import registerContentHandler from "~/drivers/viewIntentHandler";
+import { registerContentHandler } from "~/drivers/viewIntentHandler";
 import Bec2File from "~/bec2Format";
 import {
   reportReaderInfo,

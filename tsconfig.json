@@ -12,10 +12,16 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
+      "~/drivers/*": ["app/drivers/*.mock"],
       "~/*": ["app/*"],
       "@/*": ["app/*"]
     }
   },
-  "include": ["app/**/*", "types"],
-  "exclude": ["node_modules", "platforms"]
+  "ts-node": {
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  },
+  "include": ["app", "tests"],
+  "exclude": ["node_modules", "platforms", "hooks"]
 }

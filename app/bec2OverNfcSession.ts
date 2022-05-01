@@ -15,7 +15,7 @@ export interface ReaderInfo {
   hwRevNo: string;
   licenseBitMask: number;
   busAdr?: number;
-  rawData: number[];
+  rawData?: number[];
 }
 
 export type ReaderStats = [number, number][];

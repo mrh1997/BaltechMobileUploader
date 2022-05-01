@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import { describe, it } from "mocha";
-import Bec2File from "../app/bec2Format";
+import Bec2File from "~/bec2Format";
 
 describe("Bec2File class", () => {
   it("should split header lines into keys and values", () => {

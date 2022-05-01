@@ -1,37 +1,32 @@
-export interface EmulatedCard {
-  powerUp(): void;
-  processApdu(input: number[]|Uint8Array): number[]|Uint8Array;
-}
-
-let activeEmulatedCard: EmulatedCard = null;
-let activeHf = false;
-
-export function activateEmulatedCard(emuCard: EmulatedCard) {
-  activeEmulatedCard = emuCard;
-  if (activeEmulatedCard && activeHf) emuCard.powerUp();
-}
+import {
+  _activeEmulatedCard,
+  _activeHf,
+  _setActiveHf,
+} from "./hostCardEmulationService.common";
+export type { EmulatedCard } from "./hostCardEmulationService.common";
+export { activateEmulatedCard } from "./hostCardEmulationService.common";
 
 @NativeClass()
 @JavaProxy("de.baltech.HostCardEmulationService")
-class HostCardEmulationService extends android.nfc.cardemulation
+class HostCardEmulationServiceAndroid extends android.nfc.cardemulation
   .HostApduService {
   onDeactivated(reason: number) {
-    activeHf = false;
+    _setActiveHf(false);
   }
 
   processCommandApdu(commandApdu: any, extras?: any): any {
     var response;
-    if (!activeHf) {
-      activeHf = true;
-      if (activeEmulatedCard) activeEmulatedCard.powerUp();
+    if (!_activeHf) {
+      _setActiveHf(true);
+      if (_activeEmulatedCard) _activeEmulatedCard.powerUp();
     }
-    if (!activeEmulatedCard) {
+    if (!_activeEmulatedCard) {
       // ISO7816 STATUS "Instruction code not supported or invalid":
       response = [0x6d, 0x00];
     } else {
       try {
         const commandApduAsJsArray = new Uint8Array(commandApdu);
-        response = activeEmulatedCard.processApdu(commandApduAsJsArray);
+        response = _activeEmulatedCard.processApdu(commandApduAsJsArray);
       } catch (e) {
         console.log(`Host Card Emulation throwed Error "${e}"`);
         // ISO7816 STATUS "Execution Error (State of non-volatile memory unchanged)"
